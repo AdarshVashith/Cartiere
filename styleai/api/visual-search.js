@@ -42,9 +42,9 @@ Return ONLY valid JSON in exactly this shape:
   ]
 }`;
 
-    // Call Gemini 1.5 Flash (vision-capable and stable)
+    // Call Gemini 2.0 Flash (stable and vision-capable)
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
