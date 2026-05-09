@@ -198,9 +198,6 @@ export default function TryOnModal({
           </div>
         </aside>
       </div>
-
-      </div>
-
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
