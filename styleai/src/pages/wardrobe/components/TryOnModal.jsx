@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { auth } from '../../../firebase/firebase'
+import { runFrontendVTO } from '../../../utils/geminiVto'
 import { saveToWishlist } from '../../Wishlist'
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || ''
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL && !window.location.hostname.includes('vercel.app') 
+  ? import.meta.env.VITE_BACKEND_URL 
+  : ''
 
 export default function TryOnModal({
   avatarUrl,
   selectedCloth,
   wardrobe,
-  onClose
+  onClose,
+  onDelete
 }) {
+  const navigate = useNavigate();
   const [currentCloth, setCurrentCloth] = useState(selectedCloth)
   const [resultImageUrl, setResultImageUrl] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -28,32 +34,25 @@ export default function TryOnModal({
   }, [currentCloth, avatarUrl])
 
   const renderTryOn = async () => {
-    if (!currentCloth || !avatarUrl) return
+    if (!currentCloth) return;
+
+    if (!avatarUrl) {
+      setError('Please create your AI Avatar first to use Virtual Try-On.');
+      return;
+    }
 
     setLoading(true)
     setError(null)
     setResultImageUrl(null)
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/try-on`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          avatarUrl,
-          clothImageUrl: currentCloth.imageUrl,
-          category: currentCloth.category,
-          clothName: currentCloth.name,
-          gender: auth.currentUser?.gender || undefined
-        })
-      })
-
-      const data = await response.json()
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Could not generate try-on result')
-      }
-
-      setResultImageUrl(data.imageUrl)
+      const vtoImageUrl = await runFrontendVTO(
+        avatarUrl,
+        currentCloth.imageUrl,
+        currentCloth.category,
+        currentCloth.name
+      );
+      setResultImageUrl(vtoImageUrl);
     } catch (renderError) {
       console.error(renderError)
       setError(renderError.message || 'Could not generate try-on preview')
@@ -229,10 +228,30 @@ export default function TryOnModal({
                 color: '#dc2626',
                 padding: '12px 16px',
                 borderRadius: '12px',
-                fontSize: '14px'
+                fontSize: '14px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
               }}
             >
-              {error}
+              <span>{error}</span>
+              {error.includes('Avatar') && (
+                <button
+                  onClick={() => navigate('/generate-model')}
+                  style={{
+                    background: '#dc2626',
+                    color: 'white',
+                    border: 'none',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Create Avatar
+                </button>
+              )}
             </div>
           )}
 
@@ -332,52 +351,78 @@ export default function TryOnModal({
             {wardrobe.map(cloth => (
               <div
                 key={cloth.id}
-                onClick={() => setCurrentCloth(cloth)}
-                style={{
-                  cursor: 'pointer',
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  border: currentCloth?.id === cloth.id
-                    ? '2px solid #F97316'
-                    : '2px solid transparent',
-                  background: '#f9f9f9',
-                  transition: 'border-color 0.2s'
-                }}
+                style={{ position: 'relative' }}
               >
-                <img
-                  src={cloth.imageUrl}
-                  alt={cloth.name}
+                <div
+                  onClick={() => setCurrentCloth(cloth)}
                   style={{
-                    width: '100%',
-                    height: '110px',
-                    objectFit: 'cover',
-                    display: 'block'
-                  }}
-                  crossOrigin="anonymous"
-                />
-                <p
-                  style={{
-                    fontSize: '11px',
-                    color: '#6b7280',
-                    padding: '6px 8px',
-                    margin: 0,
+                    cursor: 'pointer',
+                    borderRadius: '12px',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
+                    border: currentCloth?.id === cloth.id
+                      ? '2px solid #F97316'
+                      : '2px solid transparent',
+                    background: '#f9f9f9',
+                    transition: 'border-color 0.2s'
                   }}
                 >
-                  {cloth.name}
-                </p>
-                <p
+                  <img
+                    src={cloth.imageUrl}
+                    alt={cloth.name}
+                    style={{
+                      width: '100%',
+                      height: '110px',
+                      objectFit: 'cover',
+                      display: 'block'
+                    }}
+                    crossOrigin="anonymous"
+                  />
+                  <p
+                    style={{
+                      fontSize: '11px',
+                      color: '#6b7280',
+                      padding: '6px 8px',
+                      margin: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {cloth.name}
+                  </p>
+                </div>
+                {/* Side Remove Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm('Remove this item from your wardrobe?')) {
+                      onDelete(cloth.id);
+                      if (currentCloth?.id === cloth.id) setCurrentCloth(null);
+                    }
+                  }}
                   style={{
-                    fontSize: '10px',
-                    color: '#9ca3af',
-                    padding: '0 8px 8px',
-                    margin: 0
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    background: 'rgba(255,255,255,0.9)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '24px',
+                    height: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ef4444',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    zIndex: 20
                   }}
+                  title="Remove from wardrobe"
                 >
-                  {cloth.category}
-                </p>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
               </div>
             ))}
           </div>

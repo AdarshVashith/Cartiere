@@ -1,13 +1,16 @@
+const path = require('path')
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    require('dotenv').config({ path: path.resolve(process.cwd(), '.env') })
+  } catch (e) {}
+}
 const express = require('express')
 const fetch = require('node-fetch')
 const FormData = require('form-data')
 const fs = require('fs/promises')
 const os = require('os')
-const path = require('path')
+const { runVTOPipeline } = require('./vto_pipeline')
 let gradioClientPromise = null
-require('dotenv').config({ 
-  path: path.resolve(__dirname, '.env') 
-})
 console.log('SERPAPI_KEY value:', 
   process.env.SERPAPI_KEY 
     ? process.env.SERPAPI_KEY.substring(0, 10) + '...' 
@@ -27,9 +30,28 @@ console.log('GROQ_API_KEY:', process.env.GROQ_API_KEY ? 'SET' : 'MISSING')
 console.log('GEMINI_API_KEY:', process.env.GEMINI_API_KEY ? 'SET' : 'MISSING')
 
 const app = express()
+const configuredFrontendUrls = [
+  process.env.FRONTEND_URL,
+  process.env.VITE_FRONTEND_URL
+].filter(Boolean)
+const GEMINI_IMAGE_MODEL =
+  process.env.GEMINI_IMAGE_MODEL || 'gemini-2.0-flash-exp'
+const GEMINI_IMAGE_FALLBACK_MODEL =
+  process.env.GEMINI_IMAGE_FALLBACK_MODEL || 'gemini-1.5-flash'
+const GEMINI_IMAGE_CANDIDATE_MODELS = [
+  GEMINI_IMAGE_MODEL,
+  GEMINI_IMAGE_FALLBACK_MODEL
+].filter(Boolean)
+let geminiModelListCache = null
 
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  const requestOrigin = req.headers.origin
+  const allowOrigin = requestOrigin && configuredFrontendUrls.includes(requestOrigin)
+    ? requestOrigin
+    : configuredFrontendUrls[0] || '*'
+
+  res.setHeader('Access-Control-Allow-Origin', allowOrigin)
+  res.setHeader('Vary', 'Origin')
   res.setHeader('Access-Control-Allow-Methods', 
     'GET, POST, PUT, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 
@@ -124,135 +146,13 @@ async function waitForReplicatePrediction(predictionId) {
   throw new Error('Replicate prediction timed out')
 }
 
-function withTimeout(promise, ms, message) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      setTimeout(() => reject(new Error(message)), ms)
-    })
-  ])
-}
-
-async function downloadImageToTempFile(imageUrl, prefix) {
-  const response = await fetch(imageUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 StyleAI/1.0',
-      'Accept': 'image/*,*/*;q=0.8'
-    }
-  })
-
-  if (!response.ok) {
-    throw new Error(`Could not download source image (${response.status})`)
-  }
-
-  const contentType = response.headers.get('content-type') || 'image/jpeg'
-  if (!contentType.startsWith('image/')) {
-    throw new Error('Source URL did not return an image')
-  }
-
-  const extension = contentType.includes('png')
-    ? 'png'
-    : contentType.includes('webp')
-      ? 'webp'
-      : 'jpg'
-
-  const buffer = await response.buffer()
-  const tempFilePath = path.join(
-    os.tmpdir(),
-    `styleai-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`
-  )
-
-  await fs.writeFile(tempFilePath, buffer)
-  return tempFilePath
-}
-
-async function imageUrlToInlinePart(imageUrl, label = 'image') {
-  const response = await fetch(imageUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 StyleAI/1.0',
-      'Accept': 'image/*,*/*;q=0.8'
-    }
-  })
-
-  if (!response.ok) {
-    throw new Error(`Could not download ${label} (${response.status})`)
-  }
-
-  const mimeType = response.headers.get('content-type') || 'image/jpeg'
-  if (!mimeType.startsWith('image/')) {
-    throw new Error(`${label} URL did not return an image`)
-  }
-
-  const buffer = await response.buffer()
-  return {
-    inlineData: {
-      mimeType,
-      data: buffer.toString('base64')
-    }
-  }
-}
-
-async function generateGeminiImage({ prompt, imageUrls }) {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY missing or not configured')
-  }
-
-  const imageParts = await Promise.all(
-    imageUrls.filter(Boolean).map((url, index) => imageUrlToInlinePart(url, `image ${index + 1}`))
-  )
-
-  const response = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-    {
-      method: 'POST',
-      headers: {
-        'x-goog-api-key': process.env.GEMINI_API_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              ...imageParts
-            ]
-          }
-        ],
-        generationConfig: {
-          responseModalities: ['TEXT', 'IMAGE']
-        }
-      })
-    }
-  )
-
-  const data = await response.json()
-  if (!response.ok) {
-    const geminiMessage = data?.error?.message || 'Gemini image generation failed'
-    const quotaExceeded =
-      response.status === 429 ||
-      geminiMessage.toLowerCase().includes('quota exceeded') ||
-      geminiMessage.toLowerCase().includes('rate limit')
-
-    const error = new Error(
-      quotaExceeded
-        ? 'Gemini image quota is exhausted right now. Please try again later or use a different key.'
-        : geminiMessage
-    )
-    error.statusCode = quotaExceeded ? 429 : response.status
-    error.rawMessage = geminiMessage
-    throw error
-  }
-
-  const parts = data?.candidates?.[0]?.content?.parts || []
-  const imagePart = parts.find((part) => part.inlineData?.data || part.inline_data?.data)
-
-  if (!imagePart) {
-    throw new Error('Gemini did not return an image')
-  }
-
-  const inlineData = imagePart.inlineData || imagePart.inline_data
-  const mimeType = inlineData.mimeType || inlineData.mime_type || 'image/png'
-  return `data:${mimeType};base64,${inlineData.data}`
+/**
+ * Helper to download an image URL into a Blob
+ */
+async function urlToBlob(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to download image from ${url}`);
+  return response.blob();
 }
 
 async function createGroqJsonResponse({ systemPrompt, userPrompt, maxTokens = 1000 }) {
@@ -412,128 +312,80 @@ app.post('/api/generate-avatar', async (req, res) => {
   }
 })
 
-// ENDPOINT 2 — Virtual try-on with Gemini image editing
+// ENDPOINT 2 — Virtual try-on with Hugging Face Inference
 app.post('/api/try-on', async (req, res) => {
   try {
-    const { avatarUrl, clothImageUrl, category, clothName, gender } = req.body
+    const { avatarUrl, clothImageUrl, category } = req.body
 
-    console.log('=== Virtual Try-On (Gemini) ===')
-    console.log({ avatarUrl, clothImageUrl, category, clothName, gender })
-
-    if (!avatarUrl) {
-      throw new Error('No avatar URL provided')
+    console.log('=== Virtual Try-On (Hugging Face) ===')
+    if (!avatarUrl || !clothImageUrl) {
+      throw new Error('Missing avatarUrl or clothImageUrl')
     }
 
-    if (!clothImageUrl) {
-      throw new Error('No cloth image URL provided')
-    }
-
-    const safeGender = String(gender || 'unspecified').toLowerCase()
-    const prompt = `You are editing a user's 2D avatar image to preview one clothing item realistically.
-Keep the person's face, body shape, pose, background, camera angle, and identity the same.
-Apply ONLY the provided ${category || 'garment'} from the reference garment image onto the avatar.
-The item is: ${clothName || 'selected garment'}.
-The user gender presentation is ${safeGender}.
-Preserve the garment's main color, silhouette, and visible details as closely as possible.
-Do not add extra accessories, props, new people, or change the hairstyle.
-Return a polished fashion preview image only.`
-
-    const dataUrl = await withTimeout(
-      generateGeminiImage({
-        prompt,
-        imageUrls: [avatarUrl, clothImageUrl]
-      }),
-      90000,
-      'Gemini virtual try-on timed out. Please try again.'
-    )
+    // Determine if it's a top or bottom
+    const isBottom = ['Bottom', 'Pants', 'Skirt', 'Shorts', 'Pants (Jeans)'].includes(category);
+    
+    const resultImage = await runVTOPipeline(
+      avatarUrl,
+      isBottom ? null : clothImageUrl,
+      isBottom ? clothImageUrl : null
+    );
 
     res.json({
       success: true,
-      imageUrl: dataUrl,
-      provider: 'gemini',
-      model: 'gemini-2.0-flash'
-    })
-  } catch (err) {
-    const errorMessage =
-      err?.message ||
-      err?.error ||
-      err?.detail ||
-      (typeof err === 'string' ? err : JSON.stringify(err))
-
-    console.error('Try-on error:', err?.rawMessage || errorMessage)
-    res.status(err?.statusCode || 500).json({
-      error: errorMessage,
+      imageUrl: resultImage,
       provider: 'gemini'
     })
+  } catch (err) {
+    console.error('Try-on error details:', err)
+    res.status(500).json({ success: false, error: err.message, provider: 'gemini' })
   }
 })
 
-// ENDPOINT 2B — Full outfit preview with Gemini image editing
+// ENDPOINT 2B — Full outfit preview with Hugging Face VTO pipeline
 app.post('/api/generate-outfit-preview', async (req, res) => {
   try {
-    const { avatarUrl, items, occasion, timeOfDay, vibe, gender } = req.body
+    const { avatarUrl, items } = req.body
 
-    if (!avatarUrl) {
-      throw new Error('No avatar URL provided')
+    if (!avatarUrl || !Array.isArray(items)) {
+      throw new Error('Missing avatarUrl or items')
     }
 
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new Error('No outfit items provided')
+    // Sort items into Top and Bottom categories for the 2-step pipeline
+    // Sort items into Top and Bottom categories (case-insensitive)
+    const topItem = items.find(i => {
+      const cat = (i.category || '').toLowerCase();
+      return ['top', 'jacket', 'dress', 'suit', 'sportswear', 'shirt', 'upperwear'].includes(cat);
+    });
+    
+    const bottomItem = items.find(i => {
+      const cat = (i.category || '').toLowerCase();
+      return ['bottom', 'pants', 'skirt', 'shorts', 'pants (jeans)', 'lowerwear'].includes(cat);
+    });
+
+    if (!topItem && !bottomItem) {
+      throw new Error('No compatible garments (Top or Bottom) found for preview')
     }
 
-    const validItems = items.filter((item) => item?.imageUrl)
-    if (validItems.length === 0) {
-      throw new Error('Outfit items are missing image URLs')
-    }
+    console.log(`Outfit Preview: Top=${topItem?.name || 'none'}, Bottom=${bottomItem?.name || 'none'}`);
 
-    const itemLines = validItems.map((item) =>
-      `- ${item.category || 'Item'}: ${item.name || 'Unnamed'} | Color: ${item.color || 'unknown'} | Brand: ${item.brand || 'unknown'}`
-    ).join('\n')
-
-    const prompt = `You are editing a user's 2D avatar image to show a complete outfit preview.
-Keep the person's face, body shape, skin tone, pose, stance, and background exactly the same.
-Apply ALL provided outfit items together onto the avatar as one cohesive look.
-The user gender presentation is ${String(gender || 'unspecified').toLowerCase()}.
-Occasion: ${occasion || 'unspecified'}.
-Time of day: ${timeOfDay || 'unspecified'}.
-Vibe: ${vibe || 'stylish everyday'}.
-
-Use these exact pieces:
-${itemLines}
-
-Rules:
-- Every available upper wear, bottom wear, and shoes reference must be visibly represented on the avatar.
-- Preserve the clothing colors and overall silhouettes closely.
-- Do not remove body parts, crop the figure, change the hairstyle, or change the person's identity.
-- Keep the result as a realistic 2D fashion preview image of the same person wearing the selected outfit.
-- Return only the edited image.`
-
-    const dataUrl = await withTimeout(
-      generateGeminiImage({
-        prompt,
-        imageUrls: [avatarUrl, ...validItems.map((item) => item.imageUrl)]
-      }),
-      90000,
-      'Gemini outfit preview timed out. Please try again.'
-    )
+    const resultImage = await runVTOPipeline(
+      avatarUrl, 
+      topItem?.imageUrl || null, 
+      bottomItem?.imageUrl || null
+    );
 
     res.json({
       success: true,
-      imageUrl: dataUrl,
-      provider: 'gemini',
-      model: 'gemini-2.0-flash'
+      imageUrl: resultImage,
+      provider: 'gemini'
     })
   } catch (err) {
-    const errorMessage =
-      err?.message ||
-      err?.error ||
-      err?.detail ||
-      (typeof err === 'string' ? err : JSON.stringify(err))
-
-    console.error('Outfit preview error:', err?.rawMessage || errorMessage)
-    res.status(err?.statusCode || 500).json({
-      error: errorMessage,
-      provider: 'gemini'
+    console.error('Outfit preview error details:', err)
+    res.status(500).json({ 
+      success: false, 
+      error: err.message || "Preview service is currently unavailable.",
+      provider: 'gemini' 
     })
   }
 })

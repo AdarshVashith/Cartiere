@@ -1,0 +1,228 @@
+:root {
+  --floral: #FFFAF2;
+  --mauve: #784854;
+  --mauve-soft: #fcf6f7;
+  --border: rgba(120, 72, 84, 0.1);
+  --dark: #1A1A1A;
+}
+
+.auth-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--floral);
+  font-family: 'Outfit', sans-serif;
+}
+
+.auth-left {
+  flex: 1.2;
+  background: var(--mauve);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 80px;
+  color: white;
+}
+
+.auth-left::before {
+  content: '';
+  position: absolute;
+  top: -100px;
+  right: -100px;
+  width: 400px;
+  height: 400px;
+  background: rgba(255, 250, 242, 0.05);
+  border-radius: 50%;
+  z-index: 0;
+}
+
+.auth-brand-wrap {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-brand {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 56px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin-bottom: 16px;
+}
+
+.auth-tagline {
+  font-size: 20px;
+  opacity: 0.8;
+  font-weight: 300;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.auth-badge {
+  position: absolute;
+  bottom: 80px;
+  left: 80px;
+  background: rgba(255, 250, 242, 0.1);
+  padding: 12px 24px;
+  border-radius: 99px;
+  font-size: 14px;
+  font-weight: 600;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 250, 242, 0.2);
+}
+
+.auth-right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: var(--floral);
+}
+
+.auth-content {
+  width: 100%;
+  max-width: 440px;
+}
+
+.auth-heading {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--dark);
+  margin-bottom: 12px;
+  line-height: 1.1;
+}
+
+.auth-subtext {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 40px;
+}
+
+.auth-toggle-pill {
+  background: var(--mauve-soft);
+  padding: 6px;
+  border-radius: 16px;
+  display: flex;
+  margin-bottom: 32px;
+  position: relative;
+}
+
+.auth-toggle-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  z-index: 1;
+  transition: all 0.3s;
+  color: var(--mauve);
+}
+
+.auth-toggle-btn.active {
+  color: white;
+  background: var(--mauve);
+  box-shadow: 0 4px 12px rgba(120, 72, 84, 0.15);
+}
+
+.form-field {
+  margin-bottom: 24px;
+}
+
+.form-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dark);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-field input {
+  width: 100%;
+  padding: 16px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: white;
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  transition: all 0.3s;
+}
+
+.form-field input:focus {
+  outline: none;
+  border-color: var(--mauve);
+  box-shadow: 0 0 0 4px rgba(120, 72, 84, 0.05);
+}
+
+.auth-submit-btn {
+  width: 100%;
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--dark);
+  color: white;
+  border: none;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+  margin-top: 8px;
+}
+
+.auth-submit-btn:hover {
+  background: var(--mauve);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(120, 72, 84, 0.15);
+}
+
+.google-btn {
+  width: 100%;
+  padding: 16px;
+  border-radius: 18px;
+  background: white;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-top: 24px;
+}
+
+.google-btn:hover {
+  background: var(--mauve-soft);
+}
+
+.auth-divider {
+  text-align: center;
+  font-size: 13px;
+  color: #aaa;
+  margin: 32px 0;
+  position: relative;
+}
+
+.auth-footer-link {
+  text-align: center;
+  margin-top: 32px;
+  font-size: 14px;
+  color: #666;
+}
+
+.auth-footer-link span {
+  color: var(--mauve);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .auth-left { display: none; }
+  .auth-right { padding: 24px; }
+}

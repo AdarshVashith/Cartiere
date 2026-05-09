@@ -1,783 +1,416 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { onAuthStateChanged } from 'firebase/auth'
-import { doc, getDoc, getDocs, collection, addDoc } from 'firebase/firestore'
-import { auth, db } from '../firebase/firebase'
-import { BottomTabNav } from '../components/TabNav'
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { auth, db } from '../firebase/firebase';
+import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import MainLayout from '../components/MainLayout';
+import './GenerateOutfit.css';
 
-const OCCASIONS = ['Casual', 'Work', 'Date Night', 'Party', 
-                   'Formal', 'Festival', 'Travel', 'Gym', 'Wedding Guest']
+const OCCASIONS = ['Casual', 'Work', 'Date Night', 'Party', 'Formal', 'Festival', 'Travel', 'Gym', 'Wedding Guest']
 const TIMES = ['Morning', 'Afternoon', 'Evening', 'Night']
 
 export default function GenerateOutfit() {
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || ''
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState({ name: 'StyleMate', avatarUrl: '', skinTone: 'neutral', city: '' });
+  const [wardrobe, setWardrobe] = useState([]);
+  const [weatherData, setWeatherData] = useState({ temp: '--', city: '', icon: '' });
+  
+  const [occasion, setOccasion] = useState('');
+  const [timeOfDay, setTimeOfDay] = useState('');
+  const [destination, setDestination] = useState('');
+  const [vibe, setVibe] = useState('');
+  
+  const [screen, setScreen] = useState('form'); // form, generating, result
+  const [result, setResult] = useState({ 
+    outfitName: '', 
+    styleScore: 0, 
+    items: [], 
+    whyThisWorks: '', 
+    hairTip: '' 
+  });
+  const [outfitPreviewUrl, setOutfitPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
-  // Auth & data
-  const [user, setUser] = useState(null)
-  const [profile, setProfile] = useState(null)
-  const [wardrobe, setWardrobe] = useState([])
-  const [weather, setWeather] = useState(null)
-
-  // Form inputs
-  const [occasion, setOccasion] = useState('')
-  const [timeOfDay, setTimeOfDay] = useState('')
-  const [destination, setDestination] = useState('')
-  const [vibe, setVibe] = useState('')
-
-  // UI states
-  const [screen, setScreen] = useState('form')
-  const [result, setResult] = useState(null)
-  const [error, setError] = useState(null)
-  const [outfitPreviewUrl, setOutfitPreviewUrl] = useState(null)
-  const [outfitPreviewLoading, setOutfitPreviewLoading] = useState(false)
-  const [outfitPreviewError, setOutfitPreviewError] = useState('')
-
-  // Load user, profile, wardrobe, weather
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (!firebaseUser) { navigate('/login'); return }
-      setUser(firebaseUser)
-
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        navigate('/login');
+        return;
+      }
       try {
-        const profileSnap = await getDoc(doc(db, 'users', firebaseUser.uid))
-        const profileData = profileSnap.exists() ? profileSnap.data() : {}
-        setProfile(profileData)
-
-        const wardrobeSnap = await getDocs(
-          collection(db, 'users', firebaseUser.uid, 'wardrobe')
-        )
-        const items = wardrobeSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        setWardrobe(items)
-
-        if (profileData.city && import.meta.env.VITE_OPENWEATHER_API_KEY) {
-          try {
-            const wRes = await fetch(
-              `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(profileData.city)}&appid=${import.meta.env.VITE_OPENWEATHER_API_KEY}&units=metric`
-            )
-            const wData = await wRes.json()
-            if (wRes.ok) setWeather(wData)
-          } catch (e) { /* weather optional */ }
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const d = userDoc.data();
+          setProfile({
+            name: String(d.name || 'StyleMate'),
+            avatarUrl: String(d.avatarUrl || ''),
+            skinTone: String(d.skinTone || 'neutral'),
+            city: String(d.city || '')
+          });
+          
+          if (d.city && import.meta.env.VITE_OPENWEATHER_API_KEY) {
+            const wRes = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(d.city)}&appid=${import.meta.env.VITE_OPENWEATHER_API_KEY}&units=metric`);
+            const wData = await wRes.json();
+            if (wRes.ok && wData.main) {
+              setWeatherData({
+                temp: String(Math.round(wData.main.temp)),
+                city: String(wData.name),
+                icon: String(wData.weather[0].icon)
+              });
+            }
+          }
         }
+        
+        const wSnap = await getDocs(collection(db, 'users', user.uid, 'wardrobe'));
+        setWardrobe(wSnap.docs.map(doc => ({
+          id: doc.id,
+          name: String(doc.data().name || 'Untitled'),
+          category: String(doc.data().category || 'Other'),
+          imageUrl: String(doc.data().imageUrl || ''),
+          color: String(doc.data().color || '#000000')
+        })));
+        
+        setLoading(false);
       } catch (err) {
-        console.error(err)
+        console.error("Data load failed:", err);
+        setLoading(false);
       }
-    })
-    return () => unsub()
-  }, [navigate])
-
-  useEffect(() => {
-    const generateOutfitPreview = async () => {
-      if (screen !== 'result' || !result?.items?.length || !profile?.avatarUrl) return
-
-      setOutfitPreviewLoading(true)
-      setOutfitPreviewError('')
-      setOutfitPreviewUrl(null)
-
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/generate-outfit-preview`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            avatarUrl: profile.avatarUrl,
-            items: result.items,
-            occasion,
-            timeOfDay,
-            vibe,
-            gender: profile?.gender || ''
-          })
-        })
-
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || 'Failed to generate outfit preview')
-        }
-
-        setOutfitPreviewUrl(data.imageUrl)
-      } catch (previewError) {
-        console.error('Outfit preview error:', previewError)
-        setOutfitPreviewError(previewError.message || 'Failed to generate outfit preview')
-      } finally {
-        setOutfitPreviewLoading(false)
-      }
-    }
-
-    generateOutfitPreview()
-  }, [screen, result, profile?.avatarUrl, profile?.gender, occasion, timeOfDay, vibe])
+    });
+    return () => unsub();
+  }, [navigate]);
 
   const handleGenerate = async () => {
-    if (!occasion || !timeOfDay) return
-    if (wardrobe.length === 0) {
-      setError('Your wardrobe is empty. Go to Wardrobe and add some clothes first.')
-      return
-    }
-
-    setScreen('loading')
-    setError(null)
-    setResult(null)
-    setOutfitPreviewUrl(null)
-    setOutfitPreviewError('')
-
+    if (!occasion || !timeOfDay) return;
+    setScreen('generating');
+    
     try {
-      const getSkinToneAdvice = (hex) => {
-        if (!hex) return 'warm neutral'
-        const r = parseInt(hex.slice(1,3), 16)
-        const g = parseInt(hex.slice(3,5), 16)
-        const b = parseInt(hex.slice(5,7), 16)
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000
-        const isWarm = r > b
-        if (brightness > 160 && isWarm) {
-          return 'light warm skin — earth tones, terracotta, olive, cream work best; avoid neon'
-        }
-        if (brightness > 160 && !isWarm) {
-          return 'light cool skin — blues, lavender, rose, mint work best; avoid orange'
-        }
-        if (brightness > 100 && isWarm) {
-          return 'medium warm skin (wheatish/dusky) — mustard, burgundy, forest green, navy work great; avoid pastels'
-        }
-        if (brightness > 100 && !isWarm) {
-          return 'medium cool skin — teal, cobalt, plum, emerald work great'
-        }
-        if (isWarm) {
-          return 'deep warm skin — bright whites, gold, red, royal blue create great contrast'
-        }
-        return 'deep cool skin — bright colors, whites, orange, lime create great contrast'
-      }
-
-      const normaliseGender = (value) => {
-        const raw = String(value || '').toLowerCase().trim()
-        if (['male', 'man', 'men', 'boy'].includes(raw)) return 'male'
-        if (['female', 'woman', 'women', 'girl'].includes(raw)) return 'female'
-        return 'unspecified'
-      }
-
-      const sanitizeHairTip = (hairTip, gender) => {
-        if (!hairTip) return ''
-
-        const text = String(hairTip).trim()
-        if (gender === 'male') {
-          return text
-            .replace(/ponytail/gi, 'textured style')
-            .replace(/hair tie/gi, 'light styling product')
-            .replace(/clip your hair back/gi, 'keep the sides neat')
-            .replace(/tie your hair back/gi, 'style your hair neatly')
-        }
-
-        if (gender === 'female') {
-          return text
-            .replace(/buzz cut/gi, 'sleek tied-back style')
-            .replace(/fade haircut/gi, 'soft face-framing style')
-        }
-
-        return text
-      }
-
-      const wardrobeText = wardrobe
-        .map(c => `- "${c.name}" | Category: ${c.category} | Color: ${c.color || 'unknown'}`)
-        .join('\n')
-
-      const weatherText = weather
-        ? `Weather: ${Math.round(weather.main?.temp)}°C, ${weather.weather?.[0]?.description}`
-        : 'Weather: unknown'
-
-      const skinTone = profile?.skinTone || '#c68642'
-      const skinAdvice = getSkinToneAdvice(skinTone)
-      const gender = normaliseGender(profile?.gender)
-      const genderStyleRule =
-        gender === 'male'
-          ? 'The user is MALE. Recommendations, outfit naming, styling logic, and hair tips must stay male-focused. Do not mention ponytails, dresses, skirts, handbags, heels, women, or feminine styling.'
-          : gender === 'female'
-            ? 'The user is FEMALE. Recommendations, outfit naming, styling logic, and hair tips must stay female-focused. Do not mention menswear, beards, fades, or masculine styling unless explicitly requested.'
-            : 'Gender is unspecified. Keep styling neutral and avoid gendered assumptions.'
-
-      const occasionCategoryRules = {
-        'Home': 'MUST include comfortable items like joggers, sweatpants, casual tees. NO formal items.',
-        'Gym': 'MUST include athletic/sportswear. NO jeans, blazers, or formal items.',
-        'Casual': 'Use jeans, chinos, casual tees, sneakers. NO formal blazers or oxford shoes.',
-        'Work': 'Use formal trousers, oxford shirts, blazers, formal shoes. NO joggers or graphic tees.',
-        'Formal': 'Use blazer + formal trousers + formal shoes. NO casual items whatsoever.',
-        'Party': 'Use dark jeans or chinos + stylish top + clean sneakers or formal shoes.',
-        'Date Night': 'Smart casual — dark jeans, clean shirt, loafers or sneakers. Look put-together.',
-        'Festival': 'Casual and fun — denim jacket, cargo pants, sneakers. Bold colors welcome.',
-        'Travel': 'Comfortable yet stylish — chinos or jeans, linen shirt, loafers or sneakers.',
-        'Wedding Guest': 'Formal — blazer + formal trousers + formal shoes. Must look sharp.'
-      }
-
-      const categoryRule = occasionCategoryRules[occasion] ||
-        'Pick items appropriate for the occasion.'
-
-      const prompt = `You are an expert personal stylist with deep knowledge of color theory.
-
-STRICT RULES — YOU MUST FOLLOW ALL OF THESE:
-1. Select EXACTLY 3 items: 1 Top + 1 Bottom + 1 Shoes (or add Jacket as 4th if appropriate)
-2. NEVER pick 2 items from the same category (no 2 Tops, no 2 Bottoms)
-3. OCCASION RULE: ${categoryRule}
-4. Only select items that exist EXACTLY in the wardrobe list below
-5. Use the exact full item name as written in the wardrobe list
-6. ${genderStyleRule}
-7. Hair tip must match the user's gender presentation and must never reference the opposite gender
-
-USER DETAILS:
-- Skin tone: ${skinTone} — ${skinAdvice}
-- Gender: ${gender}
-- Body type: ${profile?.bodyType || 'average'}
-- Age: ${profile?.age || 'young adult'}
-- ${weatherText}
-
-USER REQUEST:
-- Occasion: ${occasion}
-- Time of day: ${timeOfDay}
-- Going to: ${destination || 'not specified'}
-- Vibe: ${vibe || 'everyday comfortable look'}
-
-WARDROBE (only these items exist — use EXACT names):
-${wardrobe.map((c, i) =>
-  `${i + 1}. "${c.name}" | ${c.category} | Color: ${c.color} | Best for: ${c.occasion || 'general'}`
-).join('\n')}
-
-COLOR THEORY TASK:
-The user has ${skinAdvice}.
-Look at the colors available in the wardrobe and pick a combination where:
-- Colors complement each other (analogous or neutral + accent rule)
-- The overall palette flatters skin tone ${skinTone}
-- The combination matches the ${occasion} occasion
-- Consider the weather: ${weatherText}
-
-Example good combinations for this skin tone:
-${skinAdvice.includes('warm')
-  ? '- Navy blue jeans + White shirt + Brown loafers (classic, warm-skin friendly)\n- Olive pants + Grey tee + White sneakers (earthy, suits warm tones)\n- Beige chinos + Light blue shirt + Brown shoes (warm neutral harmony)'
-  : '- Dark blue jeans + Light blue shirt + White sneakers (cool tone harmony)\n- Black trousers + White shirt + Black shoes (high contrast, suits cool tones)\n- Grey pants + Navy tee + White sneakers (cool neutral palette)'
-}
-
-Return ONLY this JSON (no markdown, no extra text):
-{
-  "outfitName": "Creative 2-4 word outfit name related to the occasion and vibe",
-  "styleScore": <number 72-96>,
-  "selectedItems": [
-    "exact wardrobe item name 1",
-    "exact wardrobe item name 2", 
-    "exact wardrobe item name 3"
-  ],
-  "whyThisWorks": "2-3 sentences: explain WHY these specific colors work together for ${skinAdvice}. Mention the specific color combination (e.g. navy + beige + brown) and the occasion.",
-  "colorHarmony": "One sentence about the color palette and how it complements skin tone ${skinTone}.",
-  "hairTip": "One specific, practical ${gender === 'male' ? 'male grooming / hairstyle' : gender === 'female' ? 'female hairstyle / grooming' : 'gender-neutral grooming'} tip for ${occasion} at ${timeOfDay}.",
-  "colorPalette": ["#hex of item 1 color", "#hex of item 2 color", "#hex of item 3 color"]
-}`
+      const wardrobeText = wardrobe.map(i => `${i.name} (${i.category})`).join(', ');
+      const prompt = `Style Request: ${occasion} look for ${timeOfDay}. 
+      Wardrobe: ${wardrobeText}. 
+      Skin Tone: ${profile.skinTone}. 
+      Weather: ${weatherData.temp}°C. 
+      Vibe: ${vibe}. 
+      Return JSON: { "outfitName": "string", "styleScore": number, "selectedItems": ["string"], "whyThisWorks": "string", "hairTip": "string" }`;
 
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}` 
         },
         body: JSON.stringify({
           model: 'llama-3.1-8b-instant',
           messages: [
-            {
-              role: 'system',
-              content: 'You are a professional fashion stylist. Always respond with only valid JSON. No markdown. No explanation outside JSON.'
-            },
+            { role: 'system', content: 'You are a luxury fashion stylist. Respond only with JSON.' },
             { role: 'user', content: prompt }
           ],
-          response_format: { type: 'json_object' },
-          max_tokens: 600,
-          temperature: 0.7
+          response_format: { type: 'json_object' }
         })
-      })
+      });
 
-      if (!res.ok) {
-        const errData = await res.json()
-        throw new Error(errData.error?.message || 'Groq API failed')
-      }
-
-      const data = await res.json()
-      const parsed = JSON.parse(data.choices[0].message.content)
-
-      const matchedItems = (parsed.selectedItems || []).map(selectedName => {
-        const normalise = s => s.toLowerCase().trim()
-          .replace(/[^a-z0-9 ]/g, '')
-
-        let found = wardrobe.find(w =>
-          normalise(w.name) === normalise(selectedName)
-        )
-
-        if (!found) {
-          found = wardrobe.find(w =>
-            normalise(w.name).includes(normalise(selectedName)) ||
-            normalise(selectedName).includes(normalise(w.name))
-          )
+      const data = await res.json();
+      const parsed = JSON.parse(data.choices[0].message.content);
+      
+      const matched = (parsed.selectedItems || []).map(name => {
+        const found = wardrobe.find(w => w.name.toLowerCase().includes(String(name).toLowerCase()));
+        // Strictly return only primitive fields — no Firestore object fields allowed
+        if (found) {
+          return {
+            name: String(found.name || ''),
+            category: String(found.category || 'Other'),
+            imageUrl: String(found.imageUrl || ''),
+            color: String(found.color || '#000000')
+          };
         }
+        return { name: String(name), category: 'Stylist Choice', imageUrl: '', color: '#000000' };
+      });
 
-        if (!found) {
-          const selectedWords = normalise(selectedName).split(' ')
-            .filter(w => w.length > 2)
-          found = wardrobe.find(w => {
-            const wardrobeWords = normalise(w.name).split(' ')
-              .filter(x => x.length > 2)
-            const overlap = selectedWords.filter(sw =>
-              wardrobeWords.some(ww => ww.includes(sw) || sw.includes(ww))
-            )
-            return overlap.length >= 2
-          })
+      setResult({
+        outfitName: String(parsed.outfitName || 'Bespoke Look'),
+        styleScore: Number(parsed.styleScore || 85),
+        whyThisWorks: String(parsed.whyThisWorks || ''),
+        hairTip: String(parsed.hairTip || ''),
+        items: matched
+      });
+
+      setScreen('result');
+      
+      // Trigger Virtual Try-On — isolated so failures never reset the result screen
+      if (profile.avatarUrl) {
+        setPreviewLoading(true);
+        try {
+          const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyDNsHj_YFjj3naCzxLagUU7IVMFV9fSbTw';
+          const MODEL = 'gemini-2.5-flash-image'; // Use the fast image generation model
+          
+          // Helper to fetch images as base64
+          const fetchB64 = async (url) => {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Failed to fetch image: ${url}`);
+            const buffer = await res.arrayBuffer();
+            const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+            const mimeType = res.headers.get('content-type')?.split(';')[0] || 'image/jpeg';
+            return { inlineData: { mimeType, data: base64 } };
+          };
+
+          // Get first 3 garments to stay within multimodal limits
+          const garments = matched.filter(i => i.imageUrl).slice(0, 3);
+          const [avatarImg, ...clothImgs] = await Promise.all([
+            fetchB64(profile.avatarUrl),
+            ...garments.map(i => fetchB64(i.imageUrl))
+          ]);
+
+          const outfitDesc = matched.map(i => `${i.category}: ${i.name}`).join(', ');
+          const prompt = `Task: Photorealistic Virtual Try-On.
+Reference Image 1: The person (user's avatar).
+Clothing Items: ${outfitDesc}.
+
+Generate a high-resolution professional fashion image of the EXACT person from Reference Image 1 wearing the specified outfit. 
+- Preserve facial identity, body shape, and skin tone 100%.
+- Background: Clean studio white/gray.
+- Full body pose.`;
+
+          const vtoRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{
+                  parts: [
+                    avatarImg,
+                    ...clothImgs,
+                    { text: prompt }
+                  ]
+                }],
+                generationConfig: { responseModalities: ['IMAGE'] }
+              })
+            }
+          );
+
+          if (!vtoRes.ok) {
+            throw new Error(`Gemini VTO failed: ${vtoRes.status}`);
+          }
+
+          const vtoData = await vtoRes.json();
+          let imageBase64 = null;
+          let imageMime = 'image/png';
+          
+          const candidates = vtoData?.candidates || [];
+          for (const cand of candidates) {
+            const parts = cand?.content?.parts || [];
+            for (const part of parts) {
+              if (part?.inlineData?.mimeType?.startsWith('image/')) {
+                imageBase64 = part.inlineData.data;
+                imageMime = part.inlineData.mimeType;
+                break;
+              }
+            }
+            if (imageBase64) break;
+          }
+
+          if (imageBase64) {
+            setOutfitPreviewUrl(`data:${imageMime};base64,${imageBase64}`);
+          }
+        } catch (vtoErr) {
+          console.warn('Virtual try-on unavailable:', vtoErr.message);
+        } finally {
+          setPreviewLoading(false);
         }
-
-        return found || {
-          name: selectedName,
-          category: 'Item',
-          color: 'Unknown',
-          imageUrl: null,
-          brand: ''
-        }
-      })
-
-      const seen = new Set()
-      const dedupedItems = matchedItems.filter(item => {
-        const key = item.id || item.name
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
-
-      const outfitResult = {
-        ...parsed,
-        hairTip: sanitizeHairTip(parsed.hairTip, gender),
-        items: dedupedItems
-      }
-      setResult(outfitResult)
-      setScreen('result')
-
-      if (user) {
-        await addDoc(collection(db, 'users', user.uid, 'outfits'), {
-          ...outfitResult,
-          occasion, timeOfDay, destination, vibe,
-          generatedAt: new Date().toISOString()
-        }).catch(console.error)
       }
 
     } catch (err) {
-      console.error('Generate error:', err)
-      setError(err.message || 'Failed to generate outfit. Try again.')
-      setScreen('form')
+      console.error("Generation failed:", err);
+      setScreen('form');
     }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FAF8F5]">
+        <div className="premium-loader"></div>
+      </div>
+    );
   }
 
-  if (screen === 'loading') {
+  if (screen === 'generating') {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-6 px-8">
-        <div className="relative">
-          <div className="w-20 h-20 border-4 border-gray-200 border-t-black rounded-full animate-spin"/>
-          <div className="absolute inset-0 flex items-center justify-center text-2xl">✦</div>
-        </div>
-        <div className="text-center">
-          <p className="font-bold text-xl mb-1">Styling your look...</p>
-          <p className="text-gray-400 text-sm">
-            Matching your wardrobe to your vibe
-          </p>
-        </div>
-        <div className="bg-white rounded-2xl border border-gray-100 px-6 py-4 text-center max-w-xs">
-          <p className="text-xs text-gray-400 mb-2">Analysing</p>
-          <div className="flex flex-wrap gap-2 justify-center">
-            {[occasion, timeOfDay, weather ? `${Math.round(weather.main?.temp)}°C` : null, profile?.skinTone]
-              .filter(Boolean)
-              .map((tag, i) => (
-                <span key={i} className="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full">
-                  {tag}
-                </span>
-              ))}
-          </div>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', gap: '24px' }}>
+        <div className="premium-loader"></div>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontFamily: 'var(--font-editorial)', fontSize: '28px', color: 'var(--text-primary)', marginBottom: '8px' }}>Curating your look</p>
+          <p style={{ fontSize: '12px', letterSpacing: '0.3em', color: 'var(--text-secondary)' }}>SYNTHESIZING BESPOKE OUTFIT</p>
         </div>
       </div>
-    )
-  }
-
-  if (screen === 'result' && result) {
-    return (
-      <main className="min-h-screen bg-gray-50 pb-28">
-        <div className="bg-white border-b border-gray-100 px-4 py-4 sticky top-0 z-10 flex items-center gap-3">
-          <button onClick={() => setScreen('form')} className="text-gray-400 text-xl">←</button>
-          <h1 className="font-bold text-lg flex-1">Your Outfit</h1>
-          <span className="bg-black text-white text-xs px-3 py-1.5 rounded-full font-semibold">
-            {result.styleScore}% Style Score
-          </span>
-        </div>
-
-        <div className="px-4 pt-4 space-y-4">
-          <div className="text-center py-2">
-            <p className="text-xs text-gray-400 uppercase tracking-widest mb-1">
-              {occasion} · {timeOfDay}
-            </p>
-            <h2 className="text-2xl font-bold">{result.outfitName}</h2>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-gray-100 p-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-              Outfit On Your Avatar
-            </p>
-            <div className="rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 min-h-[280px] flex items-center justify-center">
-              {outfitPreviewLoading ? (
-                <div className="py-16 text-center">
-                  <div className="w-10 h-10 border-4 border-gray-200 border-t-black rounded-full animate-spin mx-auto mb-3"/>
-                  <p className="text-sm font-semibold text-gray-700">
-                    Applying full outfit to your 2D avatar...
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Gemini is combining your top, bottom, and shoes
-                  </p>
-                </div>
-              ) : outfitPreviewUrl ? (
-                <img
-                  src={outfitPreviewUrl}
-                  alt="Outfit preview on avatar"
-                  className="w-full object-contain"
-                  style={{ maxHeight: '560px' }}
-                />
-              ) : (
-                <div className="px-6 py-12 text-center">
-                  <div className="text-4xl mb-3">🧍</div>
-                  <p className="text-sm font-semibold text-gray-700">
-                    Preview unavailable
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {outfitPreviewError || 'Could not generate the outfit preview right now.'}
-                  </p>
-                </div>
-              )}
-            </div>
-            {outfitPreviewError ? (
-              <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
-                {outfitPreviewError}
-              </div>
-            ) : null}
-          </div>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: result.items.length >= 3
-              ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
-            gap: '10px'
-          }}>
-            {result.items.map((item, i) => (
-              <div key={i} className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-                {item.imageUrl ? (
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="w-full object-cover"
-                    style={{ height: result.items.length >= 3 ? '160px' : '200px' }}
-                    onError={(e) => {
-                      e.target.style.display = 'none'
-                    }}
-                  />
-                ) : (
-                  <div className="w-full bg-gray-100 flex items-center justify-center text-3xl" style={{ height: '140px' }}>
-                    👕
-                  </div>
-                )}
-                <div className="p-2">
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <span style={{
-                      fontSize: '9px', fontWeight: '600', letterSpacing: '0.08em',
-                      textTransform: 'uppercase', padding: '1px 6px', borderRadius: '4px',
-                      background: item.category === 'Top' ? '#dbeafe' :
-                                  item.category === 'Bottom' ? '#dcfce7' :
-                                  item.category === 'Shoes' ? '#fef3c7' :
-                                  item.category === 'Jacket' ? '#f3e8ff' : '#f3f4f6',
-                      color: item.category === 'Top' ? '#1d4ed8' :
-                             item.category === 'Bottom' ? '#15803d' :
-                             item.category === 'Shoes' ? '#b45309' :
-                             item.category === 'Jacket' ? '#7e22ce' : '#374151'
-                    }}>
-                      {item.category}
-                    </span>
-                  </div>
-                  <p className="font-semibold text-xs leading-tight">{item.name}</p>
-                  <p className="text-gray-400 text-xs">{item.brand}</p>
-                  <p className="text-xs mt-0.5" style={{ color: '#6b7280' }}>
-                    {item.color}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-white rounded-2xl border border-gray-100 p-4">
-            <p className="text-xs font-semibold text-teal-600 uppercase tracking-widest mb-2">✎ Why This Works</p>
-            <p className="text-gray-700 text-sm leading-relaxed">
-              {result.whyThisWorks}
-            </p>
-          </div>
-
-          {result.colorHarmony && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Color Harmony</p>
-              <p className="text-gray-700 text-sm leading-relaxed">
-                {result.colorHarmony}
-              </p>
-              {result.colorPalette?.length > 0 && (
-                <div className="flex gap-2 mt-3">
-                  {result.colorPalette.map((hex, i) => (
-                    <div key={i} className="flex flex-col items-center gap-1">
-                      <div
-                        className="w-8 h-8 rounded-full border border-gray-200"
-                        style={{ backgroundColor: hex }}
-                      />
-                      <span className="text-gray-400 text-xs">{hex}</span>
-                    </div>
-                  ))}
-                  <div className="flex flex-col items-center gap-1 ml-2 pl-2 border-l border-gray-100">
-                    <div
-                      className="w-8 h-8 rounded-full border-2 border-dashed border-gray-300"
-                      style={{ backgroundColor: profile?.skinTone || '#c68642' }}
-                    />
-                    <span className="text-gray-400 text-xs">Skin</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {result.hairTip && (
-            <div className="bg-green-50 border border-green-100 rounded-2xl p-4">
-              <p className="text-xs font-semibold text-green-600 mb-1">
-                💇 Hair Tip
-              </p>
-              <p className="text-green-800 text-sm leading-relaxed">
-                {result.hairTip}
-              </p>
-            </div>
-          )}
-
-          <div className="bg-gray-900 rounded-2xl p-4 text-white">
-            <div className="flex flex-wrap gap-2">
-              <span className="bg-white/10 text-xs px-3 py-1 rounded-full">
-                {occasion}
-              </span>
-              <span className="bg-white/10 text-xs px-3 py-1 rounded-full">
-                {timeOfDay}
-              </span>
-              {destination && (
-                <span className="bg-white/10 text-xs px-3 py-1 rounded-full">
-                  📍 {destination}
-                </span>
-              )}
-              {weather && (
-                <span className="bg-white/10 text-xs px-3 py-1 rounded-full">
-                  🌡 {Math.round(weather.main?.temp)}°C
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-3 pb-4">
-            <button
-              onClick={() => {
-                setResult(null)
-                setScreen('form')
-                setOccasion('')
-                setTimeOfDay('')
-                setDestination('')
-                setVibe('')
-              }}
-              className="flex-1 border border-gray-200 py-3.5 rounded-2xl text-sm font-semibold text-gray-700"
-            >
-              ✦ Generate Another
-            </button>
-            <button
-              onClick={() => navigate('/home')}
-              className="flex-1 bg-black text-white py-3.5 rounded-2xl text-sm font-semibold"
-            >
-              Home
-            </button>
-          </div>
-        </div>
-        <BottomTabNav />
-      </main>
-    )
+    );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-32">
-      <div className="px-4 pt-6 pb-2 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="text-gray-400 text-xl">
-          ←
-        </button>
-      </div>
+    <MainLayout>
+      <div className="outfit-gen-root">
+        {screen === 'form' ? (
+          <div className="gen-form-stage">
+            <header className="gen-editorial-header fade-in-down">
+              <h1>Style Request</h1>
+              <p>Curating a high-fidelity look tailored to your biometric profile.</p>
+            </header>
 
-      <div className="px-4 space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            What's the vibe today?
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Answer in 30 seconds or less.
-          </p>
-          {wardrobe.length > 0 && (
-            <p className="text-xs text-teal-600 font-medium mt-2">
-              ✓ {wardrobe.length} items in your wardrobe ready to style
-            </p>
-          )}
-          {wardrobe.length === 0 && (
-            <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 mt-2">
-              <p className="text-orange-700 text-xs font-medium">
-                ⚠ Your wardrobe is empty. 
-                <button onClick={() => navigate('/wardrobe')} className="underline ml-1">
-                  Add clothes first →
-                </button>
-              </p>
+            <div className="gen-section fade-in-up">
+              <h3 className="gen-section-title">The Occasion</h3>
+              <div className="filter-grid-luxe">
+                {OCCASIONS.map(occ => (
+                  <button key={occ} onClick={() => setOccasion(occ)} className={`pill-luxe ${occasion === occ ? 'active' : ''}`}>{occ}</button>
+                ))}
+              </div>
             </div>
-          )}
-        </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-sm">
-            {error}
-          </div>
-        )}
-
-        <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-            Occasion <span className="text-red-400">*</span>
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {OCCASIONS.map(occ => (
-              <button
-                key={occ}
-                onClick={() => setOccasion(occ)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '999px',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  border: occasion === occ ? '1.5px solid #111827' : '1.5px solid #e5e7eb',
-                  background: occasion === occ ? '#111827' : '#ffffff',
-                  color: occasion === occ ? '#ffffff' : '#4b5563',
-                  cursor: 'pointer'
-                }}
-              >
-                {occ}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-            Time of Day <span className="text-red-400">*</span>
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {TIMES.map(t => (
-              <button
-                key={t}
-                onClick={() => setTimeOfDay(t)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '999px',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  border: timeOfDay === t ? '1.5px solid #111827' : '1.5px solid #e5e7eb',
-                  background: timeOfDay === t ? '#111827' : '#ffffff',
-                  color: timeOfDay === t ? '#ffffff' : '#4b5563',
-                  cursor: 'pointer'
-                }}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-            Where Are You Headed?
-          </p>
-          <input
-            type="text"
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)}
-            placeholder="e.g. college, at home, mall, restaurant"
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-          />
-        </div>
-
-        <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-            Write Whatever You Feel
-          </p>
-          <textarea
-            value={vibe}
-            onChange={(e) => setVibe(e.target.value)}
-            placeholder="e.g. 'First date, want to look confident', 'Keep it dark and minimal', 'Something breathable for the heat'"
-            rows={3}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent resize-none"
-          />
-        </div>
-
-        {profile?.skinTone && (
-          <div className="flex items-center gap-3 bg-white border border-gray-100 rounded-xl px-4 py-3">
-            <div
-              className="w-8 h-8 rounded-full border border-gray-200 flex-shrink-0"
-              style={{ backgroundColor: profile.skinTone }}
-            />
-            <div>
-              <p className="text-xs font-semibold text-gray-700">
-                Skin tone matched
-              </p>
-              <p className="text-xs text-gray-400">
-                AI will pick colors that complement {profile.skinTone}
-              </p>
+            <div className="gen-section fade-in-up" style={{ animationDelay: '0.1s' }}>
+              <h3 className="gen-section-title">Timing</h3>
+              <div className="filter-grid-luxe">
+                {TIMES.map(t => (
+                  <button key={t} onClick={() => setTimeOfDay(t)} className={`pill-luxe ${timeOfDay === t ? 'active' : ''}`}>{t}</button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
 
-        {weather && (
-          <div className="flex items-center gap-3 bg-white border border-gray-100 rounded-xl px-4 py-3">
-            <span className="text-2xl">
-              {weather.weather?.[0]?.main === 'Rain' ? '🌧' :
-               weather.weather?.[0]?.main === 'Clear' ? '☀️' :
-               weather.weather?.[0]?.main === 'Clouds' ? '☁️' : '🌤'}
-            </span>
-            <div>
-              <p className="text-xs font-semibold text-gray-700">
-                {Math.round(weather.main?.temp)}°C · {weather.name}
-              </p>
-              <p className="text-xs text-gray-400 capitalize">
-                {weather.weather?.[0]?.description} — outfit will be weather-aware
-              </p>
+            <div className="gen-section fade-in-up" style={{ animationDelay: '0.2s' }}>
+              <h3 className="gen-section-title">Context & Vibe</h3>
+              <div className="input-group-luxe">
+                <input 
+                  type="text" 
+                  placeholder="Destination (e.g. Paris, Soho, Office)" 
+                  className="input-luxe" 
+                  value={destination} 
+                  onChange={e => setDestination(e.target.value)} 
+                />
+                <textarea 
+                  placeholder="Describe the desired aesthetic... (e.g. minimal, avant-garde, relaxed)" 
+                  className="input-luxe" 
+                  rows={3} 
+                  value={vibe} 
+                  onChange={e => setVibe(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
-        )}
-      </div>
 
-      <div className="fixed bottom-16 left-0 right-0 px-4 z-40">
-        <button
-          onClick={handleGenerate}
-          disabled={!occasion || !timeOfDay || wardrobe.length === 0}
-          style={{
-            width: '100%',
-            padding: '18px',
-            borderRadius: '20px',
-            background: (!occasion || !timeOfDay || wardrobe.length === 0)
-              ? '#9ca3af' : '#111827',
-            color: '#ffffff',
-            fontSize: '16px',
-            fontWeight: '700',
-            border: 'none',
-            cursor: (!occasion || !timeOfDay || wardrobe.length === 0)
-              ? 'not-allowed' : 'pointer',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-            letterSpacing: '0.02em'
-          }}
-        >
-          ✦ Generate Look
-        </button>
-        {(!occasion || !timeOfDay) && (
-          <p className="text-center text-xs text-gray-400 mt-2">
-            Select occasion and time of day to continue
-          </p>
+            {weatherData.temp !== '--' && (
+              <div className="weather-chip-luxe fade-in-up" style={{ animationDelay: '0.3s' }}>
+                <span>{weatherData.temp}°C in {weatherData.city} · Atmospheric adaptation active</span>
+              </div>
+            )}
+
+            <button 
+              onClick={handleGenerate} 
+              className="btn-generate-luxe fade-in-up" 
+              style={{ animationDelay: '0.4s' }}
+              disabled={!occasion || !timeOfDay}
+            >
+              Generate Look ✦
+            </button>
+          </div>
+        ) : (
+          <div className="gen-result-editorial">
+            <header className="gen-editorial-header" style={{ textAlign: 'left', marginBottom: '48px' }}>
+              <button onClick={() => setScreen('form')} className="pill-luxe" style={{ marginBottom: '24px' }}>← Back</button>
+              <div className="gen-result-root">
+                <div className="result-avatar-card fade-in-up">
+                  {previewLoading ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '20px', padding: '32px', textAlign: 'center' }}>
+                      <div className="premium-loader"></div>
+                      <div>
+                        <p style={{ fontFamily: 'var(--font-editorial)', fontSize: '22px', color: 'var(--text-primary)', marginBottom: '8px' }}>Dressing your avatar</p>
+                        <p style={{ fontSize: '11px', letterSpacing: '0.2em', color: 'var(--text-secondary)' }}>GEMINI AI IS APPLYING YOUR OUTFIT</p>
+                        <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '12px' }}>This takes ~20 seconds...</p>
+                      </div>
+                    </div>
+                  ) : outfitPreviewUrl ? (
+                    <img src={outfitPreviewUrl} alt="Outfit" className="result-avatar-image" />
+                  ) : profile.avatarUrl ? (
+                    <img src={profile.avatarUrl} alt="Your Avatar" className="result-avatar-image" />
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', padding: '40px 32px' }}>
+                      {/* Top decorative accent */}
+                      <div style={{ textAlign: 'center' }}>
+                        <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.3em', color: 'var(--accent)', marginBottom: '24px' }}>YOUR LOOK</p>
+                        <h3 style={{ fontFamily: 'var(--font-editorial)', fontSize: '36px', fontWeight: 600, lineHeight: 1.2, color: 'var(--text-primary)', marginBottom: '8px' }}>{result.outfitName}</h3>
+                        <div style={{ width: '40px', height: '2px', background: 'var(--accent)', margin: '20px auto' }}></div>
+                      </div>
+
+                      {/* Items list */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, justifyContent: 'center' }}>
+                        {result.items.map((item, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', background: 'rgba(255,255,255,0.6)', borderRadius: '14px', border: '1px solid var(--border)' }}>
+                            {item.imageUrl ? (
+                              <img src={item.imageUrl} alt={item.name} style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
+                            ) : (
+                              <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'var(--bg-secondary)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                              </div>
+                            )}
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--accent)', textTransform: 'uppercase', marginBottom: '2px' }}>{item.category}</p>
+                              <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Score at bottom */}
+                      <div style={{ textAlign: 'center', paddingTop: '24px', borderTop: '1px solid var(--border)' }}>
+                        <p style={{ fontSize: '32px', fontFamily: 'var(--font-editorial)', fontWeight: 600, color: 'var(--text-primary)' }}>{result.styleScore}<span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>%</span></p>
+                        <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: 'var(--text-secondary)', fontWeight: 700 }}>STYLE RESONANCE</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="result-info-panel">
+                  <div className="result-header-editorial fade-in-up">
+                    <span className="score-badge-inline">{result.styleScore}% STYLE RESONANCE</span>
+                    <h2 style={{ fontFamily: 'var(--font-editorial)', fontSize: '48px', margin: '8px 0', lineHeight: 1.1 }}>{result.outfitName}</h2>
+                  </div>
+
+                  <div className="items-grid-luxe fade-in-up" style={{ animationDelay: '0.1s' }}>
+                    {result.items.map((item, i) => (
+                      <div key={i} className="item-card-mini">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt={item.name} />
+                        ) : (
+                          <div style={{ width: '44px', height: '44px', borderRadius: '8px', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                          </div>
+                        )}
+                        <div className="item-card-info">
+                          <p className="cat">{item.category}</p>
+                          <p className="name">{item.name}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="stylist-note-luxe fade-in-up" style={{ animationDelay: '0.2s' }}>
+                    <h4 style={{ fontFamily: 'var(--font-editorial)', fontSize: '24px', marginBottom: '12px' }}>Stylist's Note</h4>
+                    <p style={{ color: 'var(--text-primary)', lineHeight: '1.7', fontSize: '15px' }}>{result.whyThisWorks}</p>
+                    
+                    <div className="hair-tip-luxe" style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--border)', display: 'flex', gap: '12px' }}>
+                      <span style={{ fontSize: '20px' }}>💇</span>
+                      <div>
+                        <p className="cat" style={{ marginBottom: '2px', fontSize: '10px', fontWeight: '700', color: 'var(--text-secondary)' }}>HAIR & GROOMING</p>
+                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{result.hairTip}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="result-actions-luxe fade-in-up" style={{ animationDelay: '0.3s', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <button onClick={() => setScreen('form')} className="pill-luxe">Try Another</button>
+                    <button onClick={() => navigate('/home')} className="btn-generate-luxe" style={{ marginTop: 0, padding: '12px' }}>Save & Exit</button>
+                  </div>
+                </div>
+              </div>
+            </header>
+          </div>
         )}
       </div>
-
-      <BottomTabNav />
-    </main>
-  )
+    </MainLayout>
+  );
 }

@@ -1,73 +1,36 @@
-export default function ClothCard({ cloth, onTryOn, onWorn }) {
+export default function ClothCard({ cloth, onTryOn, onWorn, onDelete }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 
-      overflow-hidden hover:shadow-md transition-all">
-      
-      {/* Cloth image */}
-      <div className="relative">
+    <div className="cloth-card-premium">
+      <div className="card-img-wrap">
         <img
           src={cloth.imageUrl}
           alt={cloth.name}
-          className="w-full h-52 object-cover"
         />
-        {/* Wear count badge */}
-        <div className="absolute top-2 right-2 bg-black/70 
-          text-white text-xs px-2 py-1 rounded-full">
-          Worn {cloth.wearCount || 0}x
-        </div>
-        {/* Category tag */}
-        <div className="absolute top-2 left-2 bg-white/90 
-          text-gray-700 text-xs px-2 py-1 rounded-full">
-          {cloth.category}
-        </div>
+        <div className="card-badge badge-cat">{cloth.category}</div>
+        <div className="card-badge badge-worn">Worn {cloth.wearCount || 0}x</div>
+        
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (window.confirm('Remove this item?')) onDelete(cloth.id);
+          }}
+          className="card-delete-btn"
+          title="Remove"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
       </div>
-      
-      {/* Cloth info */}
-      <div className="p-3">
-        <p className="font-semibold text-sm mb-1">{cloth.name}</p>
-        <p className="text-xs text-gray-400 mb-3">
-          Added {new Date(cloth.addedAt).toLocaleDateString()}
-        </p>
+
+      <div className="card-info">
+        <h4 className="cloth-name">{cloth.name}</h4>
+        <div className="cloth-meta">
+          {cloth.brand && <span>{cloth.brand} · </span>}
+          {cloth.color}
+        </div>
         
-        {/* Last worn */}
-        {cloth.lastWorn && (
-          <p className="text-xs text-gray-400 mb-3">
-            Last worn: {new Date(cloth.lastWorn).toLocaleDateString()}
-          </p>
-        )}
-        
-        {/* Repeat cycle indicator */}
-        {cloth.wearCount > 0 && (
-          <div className="flex gap-1 mb-3">
-            {[...Array(Math.min(cloth.wearCount, 5))].map((_, i) => (
-              <div key={i} 
-                className="w-2 h-2 rounded-full bg-orange-400"/>
-            ))}
-            {cloth.wearCount > 5 && (
-              <span className="text-xs text-gray-400">
-                +{cloth.wearCount - 5}
-              </span>
-            )}
-          </div>
-        )}
-        
-        <div className="flex gap-2">
-          <button
-            onClick={() => onTryOn(cloth)}
-            className="flex-1 py-2 rounded-xl bg-gray-900 
-              text-white text-xs font-semibold 
-              hover:bg-gray-700 transition-all"
-          >
-            Try on
-          </button>
-          <button
-            onClick={() => onWorn(cloth.id)}
-            className="flex-1 py-2 rounded-xl border 
-              border-gray-200 text-gray-600 text-xs 
-              font-semibold hover:bg-gray-50 transition-all"
-          >
-            Worn today
-          </button>
+        <div className="card-actions">
+          <button onClick={() => onTryOn(cloth)} className="action-btn btn-try">Try on</button>
+          <button onClick={() => onWorn(cloth.id)} className="action-btn btn-worn">Worn today</button>
         </div>
       </div>
     </div>

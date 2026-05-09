@@ -190,87 +190,89 @@ function FaceScan({ user, onComplete }) {
   };
 
   return (
-    <section className="card face-card">
-      <p className="eyebrow">Step 1</p>
-      <h2>Scan your face</h2>
-      <p className="muted">
-        Signed in as {user.email}. We analyze your face locally to estimate skin
-        tone, face shape, and expression before you continue.
-      </p>
+    <section className="bg-white rounded-[40px] shadow-sm border border-[#784854]/05 p-12 max-w-4xl mx-auto fade-in-up">
+      <header className="text-center mb-10">
+        <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-[#784854]/60 mb-3">Biometric Enrollment</p>
+        <h2 className="text-4xl font-['Cormorant_Garamond'] font-bold text-[#1A1A1A] mb-4">Initial Calibration</h2>
+        <p className="text-[#666] text-lg font-light max-w-lg mx-auto">
+          We analyze your unique facial structure to establish skin tone baseline and proportions for your digital twin.
+        </p>
+      </header>
 
       {!modelsLoaded ? (
-        <div className="loading-row">
-          <div className="spinner" />
-          <span>Loading face detection models...</span>
+        <div className="flex flex-col items-center gap-4 py-12">
+          <div className="premium-loader"></div>
+          <p className="text-[#784854]/40 font-bold uppercase tracking-widest text-[10px]">Loading AI Models</p>
         </div>
-      ) : null}
-
-      {error ? <p className="error-text">{error}</p> : null}
-
-      <div className="scan-layout">
-        <div>
-          <div className="camera-shell">
-            <video ref={videoRef} autoPlay muted playsInline className="camera-feed" />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+          <div className="flex flex-col gap-6">
+             <div className="relative rounded-[32px] overflow-hidden bg-[#fcf6f7] aspect-[4/3] border-4 border-[#784854]/05 shadow-inner">
+               <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                 <div className="w-48 h-64 border-2 border-dashed border-white/40 rounded-full"></div>
+               </div>
+               <div className="absolute top-4 left-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-white font-bold tracking-widest uppercase">Live Feed</div>
+             </div>
+             
+             <button
+               type="button"
+               className="premium-button-primary w-full py-5 rounded-2xl bg-[#1A1A1A] text-white font-bold hover:bg-[#784854] transition-all shadow-xl hover:shadow-[#784854]/20"
+               onClick={handleScan}
+               disabled={capturing || analyzing}
+             >
+               {capturing ? "Mapping..." : analyzing ? "Synthesizing..." : "Analyze Face"}
+             </button>
+             {error && <p className="text-[#e74c3c] text-center text-sm font-medium">{error}</p>}
           </div>
-          <canvas ref={canvasRef} className="hidden-canvas" />
 
-          <button
-            type="button"
-            className="primary-button scan-button"
-            onClick={handleScan}
-            disabled={!modelsLoaded || capturing || analyzing}
-          >
-            {!modelsLoaded
-              ? "Loading models..."
-              : capturing
-                ? "Capturing..."
-                : analyzing
-                  ? "Analyzing face..."
-                  : "Capture and analyze"}
-          </button>
+          <div className="flex flex-col gap-6 justify-center">
+            {results ? (
+              <div className="bg-[#fcf6f7] rounded-[32px] p-8 border border-[#784854]/10 fade-in">
+                <h3 className="text-xl font-bold text-[#1A1A1A] mb-6">Extraction Complete</h3>
+                
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: results.skinTone }} />
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#784854]/40">Skin Tone baseline</p>
+                      <p className="font-bold text-[#1A1A1A]">{results.skinTone}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-xl shadow-sm">👤</div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#784854]/40">Facial Geometry</p>
+                      <p className="font-bold text-[#1A1A1A]">{results.faceShape} Structure</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-xl shadow-sm">✨</div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#784854]/40">Biometric Expression</p>
+                      <p className="font-bold text-[#1A1A1A] capitalize">{results.dominantExpression}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-8 border-t border-[#784854]/10 flex items-center gap-2 text-[#784854]">
+                  <div className="w-5 h-5 bg-[#784854] rounded-full flex items-center justify-center text-[10px] text-white">✓</div>
+                  <span className="font-bold text-sm">Calibration Successfully established.</span>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-[#fcf6f7] rounded-[32px] p-12 border border-dashed border-[#784854]/20 flex flex-col items-center text-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-2xl shadow-sm text-[#784854]/20">?</div>
+                <p className="text-[#784854]/40 font-bold uppercase tracking-widest text-[10px]">Awaiting Data Input</p>
+                <p className="text-[#666] text-sm">Position your face within the frame and capture to begin extraction.</p>
+              </div>
+            )}
+          </div>
         </div>
-
-        <div className="result-panel">
-          {capturedImage ? (
-            <div className="result-card">
-              <p className="result-title">Captured photo</p>
-              <img src={capturedImage} alt="Captured" className="result-image" />
-            </div>
-          ) : null}
-
-          {results ? (
-            <div className="result-card">
-              <p className="result-title">Analysis results</p>
-              <div className="result-row">
-                <div className="swatch" style={{ backgroundColor: results.skinTone }} />
-                <div>
-                  <p className="result-label">Skin tone</p>
-                  <p className="result-value">{results.skinTone}</p>
-                </div>
-              </div>
-              <div className="result-row">
-                <div>
-                  <p className="result-label">Face shape</p>
-                  <p className="result-value">{results.faceShape}</p>
-                </div>
-              </div>
-              <div className="result-row">
-                <div>
-                  <p className="result-label">Dominant expression</p>
-                  <p className="result-value">{results.dominantExpression}</p>
-                </div>
-              </div>
-              <div className="success-pill">Face scan complete. Continue to Step 2.</div>
-            </div>
-          ) : null}
-
-          {!results && !capturedImage ? (
-            <div className="result-card placeholder-card">
-              No face scan saved yet. Capture your photo to begin analysis.
-            </div>
-          ) : null}
-        </div>
-      </div>
+      )}
+      <canvas ref={canvasRef} className="hidden" />
     </section>
   );
 }

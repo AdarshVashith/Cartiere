@@ -1,15 +1,13 @@
-import { useEffect, useState } from 'react'
-import { onAuthStateChanged } from 'firebase/auth'
-import { 
-  doc, getDoc, collection, 
-  getDocs, addDoc, deleteDoc, updateDoc 
-} from 'firebase/firestore'
-import { db, auth } from '../../firebase/firebase'
-import { useNavigate } from 'react-router-dom'
-import ClothCard from './components/ClothCard'
-import UploadClothModal from './components/UploadClothModal'
-import TryOnModal from './components/TryOnModal'
-import { BottomTabNav } from '../../components/TabNav'
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { auth, db } from '../../firebase/firebase';
+import MainLayout from '../../components/MainLayout';
+import ClothCard from './components/ClothCard';
+import UploadClothModal from './components/UploadClothModal';
+import TryOnModal from './components/TryOnModal';
+import './Wardrobe.css';
 
 export default function Wardrobe() {
   const navigate = useNavigate()
@@ -36,7 +34,7 @@ export default function Wardrobe() {
       else navigate('/login')
     })
     return () => unsub()
-  }, [])
+  }, [navigate])
 
   // Fetch wardrobe and avatar
   useEffect(() => {
@@ -46,15 +44,12 @@ export default function Wardrobe() {
 
   const fetchData = async () => {
     try {
-      // Fetch avatar URL
       const userDoc = await getDoc(doc(db, 'users', user.uid))
       if (userDoc.exists()) {
         const userData = userDoc.data()
-        console.log('Avatar URL:', userData.avatarUrl)
         setAvatarUrl(userData.avatarUrl)
       }
 
-      // Fetch wardrobe items
       const wardrobeSnap = await getDocs(
         collection(db, 'users', user.uid, 'wardrobe')
       )
@@ -70,7 +65,8 @@ export default function Wardrobe() {
     }
   }
 
-  // Save new cloth to Firestore
+  // ... (rest of handles kept same) ...
+
   const handleSaveCloth = async (clothData) => {
     try {
       const docRef = await addDoc(
@@ -84,15 +80,12 @@ export default function Wardrobe() {
     }
   }
 
-  // Mark cloth as worn today
   const handleWorn = async (clothId) => {
     try {
       const cloth = wardrobe.find(c => c.id === clothId)
       if (!cloth) return
-
       const newWearCount = (cloth.wearCount || 0) + 1
       const today = new Date().toISOString()
-
       await updateDoc(
         doc(db, 'users', user.uid, 'wardrobe', clothId),
         {
@@ -101,19 +94,22 @@ export default function Wardrobe() {
           wearHistory: [...(cloth.wearHistory || []), today]
         }
       )
-
       setWardrobe(prev => prev.map(c =>
         c.id === clothId
-          ? { 
-              ...c, 
-              wearCount: newWearCount, 
-              lastWorn: today,
-              wearHistory: [...(c.wearHistory || []), today]
-            }
+          ? { ...c, wearCount: newWearCount, lastWorn: today, wearHistory: [...(c.wearHistory || []), today] }
           : c
       ))
     } catch (err) {
       setError('Failed to update wear count: ' + err.message)
+    }
+  }
+
+  const handleDeleteCloth = async (clothId) => {
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'wardrobe', clothId))
+      setWardrobe(prev => prev.filter(c => c.id !== clothId))
+    } catch (err) {
+      setError('Failed to delete item: ' + err.message)
     }
   }
 
@@ -282,12 +278,10 @@ export default function Wardrobe() {
         return { id: docRef.id, ...cloth }
       })
 
-      const newItems = await Promise.all(addPromises)
+      await Promise.all(addPromises)
       await fetchData()
-      alert(`✓ Added ${newItems.length} clothes to your wardrobe!`)
     } catch (err) {
       setError('Seed failed: ' + err.message)
-      console.error(err)
     } finally {
       setSeedingLoading(false)
     }
@@ -299,52 +293,45 @@ export default function Wardrobe() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-gray-200 
-          border-t-orange-400 rounded-full animate-spin"/>
+      <div className="loading-screen">
+        <div className="premium-loader"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-
-      {/* Top navbar */}
-      <div className="bg-white border-b border-gray-100 
-        px-6 py-4 flex justify-between items-center sticky top-0 z-10">
-        <h1 className="text-xl font-bold">My wardrobe</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={seedWardrobe}
-            disabled={seedingLoading || !user}
-            className="border border-gray-200 bg-white text-gray-700 px-4 py-2 
-              rounded-xl text-sm font-semibold hover:bg-gray-50 transition-all disabled:opacity-50"
-          >
-            {seedingLoading ? 'Loading...' : '✦ Load samples'}
-          </button>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="bg-gray-900 text-white px-4 py-2 
-              rounded-xl text-sm font-semibold 
-              hover:bg-gray-700 transition-all"
-          >
-            + Add cloth
-          </button>
-        </div>
-      </div>
+    <MainLayout>
+      <div className="wardrobe-content-wrap">
+        <header className="top-header fade-in-down">
+          <div className="greeting-text">
+            <h1 className="premium-title">My Wardrobe</h1>
+            <p className="premium-subtitle">{wardrobe.length} items curated for your style</p>
+          </div>
+          <div className="header-actions">
+            <button
+              onClick={seedWardrobe}
+              disabled={seedingLoading}
+              className="premium-button-secondary"
+              style={{ marginRight: '12px' }}
+            >
+              {seedingLoading ? 'Loading...' : '✦ Load Samples'}
+            </button>
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="premium-button-primary"
+            >
+              + Add Item
+            </button>
+          </div>
+        </header>
 
       {/* Category filter */}
-      <div className="px-6 py-4 flex gap-2 overflow-x-auto">
+      <div className="filter-scroll-wrap fade-in-up" style={{ animationDelay: '0.1s' }}>
         {categories.map(cat => (
           <button
             key={cat}
             onClick={() => setFilterCategory(cat)}
-            className={`px-4 py-2 rounded-full text-sm font-medium 
-              whitespace-nowrap transition-all ${
-              filterCategory === cat
-                ? 'bg-gray-900 text-white'
-                : 'bg-white text-gray-600 border border-gray-200'
-            }`}
+            className={`filter-pill ${filterCategory === cat ? 'active' : ''}`}
           >
             {cat}
           </button>
@@ -352,105 +339,63 @@ export default function Wardrobe() {
       </div>
 
       {/* Stats bar */}
-      <div className="px-6 mb-4 flex gap-4">
-        <div className="bg-white rounded-xl border border-gray-100 
-          px-4 py-2 text-center">
-          <p className="text-xs text-gray-400">Total items</p>
-          <p className="font-bold text-lg">{wardrobe.length}</p>
+      <div className="stats-row-wardrobe fade-in-up" style={{ animationDelay: '0.2s' }}>
+        <div className="stat-card-mini">
+          <span className="stat-val">{wardrobe.length}</span>
+          <span className="stat-lbl">Total Items</span>
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 
-          px-4 py-2 text-center">
-          <p className="text-xs text-gray-400">Most worn</p>
-          <p className="font-bold text-sm truncate max-w-24">
+        <div className="stat-card-mini">
+          <span className="stat-val">
             {wardrobe.length > 0
-              ? wardrobe.sort((a,b) => 
-                  (b.wearCount||0) - (a.wearCount||0))[0]?.name
-              : 'None yet'
+              ? wardrobe.sort((a,b) => (b.wearCount||0) - (a.wearCount||0))[0]?.wearCount || 0
+              : 0
             }
-          </p>
+          </span>
+          <span className="stat-lbl">Top Wear Count</span>
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 
-          px-4 py-2 text-center">
-          <p className="text-xs text-gray-400">Not worn 30d</p>
-          <p className="font-bold text-lg">
+        <div className="stat-card-mini">
+          <span className="stat-val">
             {wardrobe.filter(c => {
               if (!c.lastWorn) return true
               const diff = Date.now() - new Date(c.lastWorn).getTime()
               return diff > 30 * 24 * 60 * 60 * 1000
             }).length}
-          </p>
+          </span>
+          <span className="stat-lbl">Dormant (30d+)</span>
         </div>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="mx-6 mb-4 bg-red-50 border border-red-100 
-          text-red-600 px-4 py-3 rounded-xl text-sm">
+        <div className="error-banner fade-in">
           {error}
         </div>
       )}
 
-      {wardrobe.length > 0 && wardrobe.length < 15 && (
-        <div className="mx-6 mb-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
-          Sample wardrobe not fully loaded yet. Use `✦ Load samples` to replace the current items with the full sample wardrobe.
-        </div>
-      )}
-
       {/* Wardrobe grid */}
-      <div className="px-6 pb-24">
+      <div className="wardrobe-grid-wrap fade-in-up" style={{ animationDelay: '0.3s' }}>
         {filteredWardrobe.length === 0 ? (
-          wardrobe.length === 0 && !loading ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-4">
-              <div className="text-6xl">👕</div>
-              <p className="text-gray-600 font-semibold text-lg">Your wardrobe is empty</p>
-              <p className="text-gray-400 text-sm text-center px-8">
-                Add clothes manually or load sample items to get started
-              </p>
-              <button
-                onClick={seedWardrobe}
-                disabled={seedingLoading}
-                className="bg-black text-white px-8 py-3 rounded-2xl font-semibold text-sm disabled:opacity-50"
-              >
-                {seedingLoading ? 'Adding samples...' : '✦ Load Sample Wardrobe'}
-              </button>
-              <button
-                onClick={() => setShowUploadModal(true)}
-                className="border border-gray-200 text-gray-700 px-8 py-3 rounded-2xl font-semibold text-sm"
-              >
-                + Add My Own Clothes
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-20 gap-4">
-              <p className="text-gray-400 text-lg">
-                No clothes yet
-              </p>
-              <button
-                onClick={() => setShowUploadModal(true)}
-                className="bg-gray-900 text-white px-6 py-3 rounded-xl font-semibold hover:bg-gray-700"
-              >
-                Add your first cloth
-              </button>
-            </div>
-          )
+          <div className="empty-state-wardrobe">
+            <div className="empty-icon">👕</div>
+            <p className="empty-title">Your wardrobe is looking a bit quiet</p>
+            <p className="empty-text">Add your clothes manually or load our premium samples to get started.</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 
-            lg:grid-cols-4 gap-4">
+          <div className="wardrobe-grid-premium">
             {filteredWardrobe.map(cloth => (
               <ClothCard
                 key={cloth.id}
                 cloth={cloth}
                 onTryOn={handleTryOn}
                 onWorn={handleWorn}
+                onDelete={handleDeleteCloth}
               />
             ))}
           </div>
         )}
       </div>
 
-      <BottomTabNav />
-
-      {/* Upload modal */}
+      {/* Modals */}
       {showUploadModal && (
         <UploadClothModal
           onClose={() => setShowUploadModal(false)}
@@ -458,7 +403,6 @@ export default function Wardrobe() {
         />
       )}
 
-      {/* Try on modal */}
       {showTryOn && selectedCloth && avatarUrl && (
         <TryOnModal
           avatarUrl={avatarUrl}
@@ -468,8 +412,10 @@ export default function Wardrobe() {
             setShowTryOn(false)
             setSelectedCloth(null)
           }}
+          onDelete={handleDeleteCloth}
         />
       )}
-    </div>
+      </div>
+    </MainLayout>
   )
 }

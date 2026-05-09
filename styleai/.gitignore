@@ -1,1 +1,6 @@
 .vercel
+.env
+.env.vercel
+scratch/
+dist/
+node_modules/

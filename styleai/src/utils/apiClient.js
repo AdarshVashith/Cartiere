@@ -1,6 +1,8 @@
 import { auth } from '../firebase/firebase'
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || ''
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL && !window.location.hostname.includes('vercel.app') 
+  ? import.meta.env.VITE_BACKEND_URL 
+  : ''
 
 export default async function callBackend(path, body) {
   const user = auth.currentUser

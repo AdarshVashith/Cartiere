@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { uploadToCloudinary } from '../../../utils/cloudinary'
+import { generateCleanGarmentImage } from '../../../utils/geminiVto'
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:3001'
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL && !window.location.hostname.includes('vercel.app'))
+  ? import.meta.env.VITE_BACKEND_URL 
+  : (import.meta.env.PROD ? '' : 'http://127.0.0.1:3001')
 
 export default function UploadClothModal({ onClose, onSave }) {
   const [step, setStep] = useState('upload')
   const [uploadedImageUrl, setUploadedImageUrl] = useState(null)
   const [searchResults, setSearchResults] = useState([])
+  const [detectedDetails, setDetectedDetails] = useState(null)
   const [selectedResult, setSelectedResult] = useState(null)
   const [removedBgUrl, setRemovedBgUrl] = useState(null)
   const [clothName, setClothName] = useState('')
@@ -56,10 +60,10 @@ export default function UploadClothModal({ onClose, onSave }) {
       )
       
       const data = await response.json()
-      
       if (!data.success) throw new Error(data.error)
       
       setSearchResults(data.results)
+      setDetectedDetails(data.details)
       setStep('select')
       setLoading(false)
       
@@ -70,44 +74,54 @@ export default function UploadClothModal({ onClose, onSave }) {
     }
   }
 
-  // Step 3 — Remove background from selected image
-  const handleSelectResult = async (result) => {
+  // Step 3 — Generate high-fidelity clean shot/outfit via Gemini
+  const handleSelectResult = async (result = {}, asOutfit = false) => {
     setSelectedResult(result)
     setLoading(true)
     setError(null)
-    setStep('removing-bg')
+    setStep('generating-clean-shot')
     
     try {
-      const response = await fetch(
-        `${BACKEND_URL}/api/remove-bg`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageUrl: result.imageUrl })
-        }
-      )
+      // Use the full technical description (material/details) for the highest fidelity generation
+      const garmentDesc = detectedDetails?.material || detectedDetails?.garment || 'fashion garment';
       
-      const data = await response.json()
-      
-      if (!data.success) throw new Error(data.error)
-      
-      if (data.fallback) {
-        console.log('Using original image - bg removal unavailable')
-        setRemovedBgUrl(result.imageUrl)
+      let finalImgUrl = null;
+
+      if (asOutfit) {
+        // Full outfit generation via Pollinations (faster for complex scenes)
+        const outfitPrompt = `Complete stylish outfit including ${garmentDesc}, on a professional fashion model, cinematic lighting, 8k resolution, fashion catalog style`;
+        finalImgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(outfitPrompt)}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 9999)}`;
       } else {
-        const cloudinaryUrl = await uploadToCloudinary(
-          data.dataUrl,
-          'styleai/wardrobe'
-        )
-        setRemovedBgUrl(cloudinaryUrl)
+        // High-fidelity EXACT garment generation via Gemini
+        console.log('Regenerating garment with Gemini Image Generation...');
+        finalImgUrl = await generateCleanGarmentImage(uploadedImageUrl, garmentDesc);
       }
+      
+      const cloudinaryUrl = await uploadToCloudinary(finalImgUrl, 'styleai/wardrobe')
+      setRemovedBgUrl(cloudinaryUrl)
+
+      if (detectedDetails) {
+        if (detectedDetails.brand && detectedDetails.garment) {
+          setClothName(`${detectedDetails.brand} ${detectedDetails.garment}`)
+        } else if (detectedDetails.garment) {
+          setClothName(detectedDetails.garment)
+        }
+        
+        const matchedCat = categories.find(c => 
+          detectedDetails.garment?.toLowerCase().includes(c.toLowerCase())
+        )
+        if (matchedCat) setClothCategory(matchedCat)
+      }
+
       setStep('details')
       setLoading(false)
       
     } catch (err) {
-      setError('Background removal failed: ' + err.message)
+      console.error('Generation failed:', err)
+      setError('Could not generate styling. Using original search result.')
+      setRemovedBgUrl(result.imageUrl)
+      setStep('details')
       setLoading(false)
-      setStep('select')
     }
   }
 
@@ -134,29 +148,34 @@ export default function UploadClothModal({ onClose, onSave }) {
     <div style={{
       position: 'fixed',
       inset: 0,
-      background: 'rgba(0,0,0,0.5)',
+      background: 'rgba(0,0,0,0.4)',
+      backdropFilter: 'blur(10px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 50
+      zIndex: 3000
     }}>
-      <div className="bg-white rounded-2xl p-6 w-full max-w-lg 
-        mx-4 max-h-screen overflow-y-auto">
+      <div style={{
+        background: 'white',
+        borderRadius: '32px',
+        padding: '32px',
+        width: '100%',
+        maxWidth: '560px',
+        margin: '0 20px',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        boxShadow: '0 40px 100px rgba(0,0,0,0.3)',
+        border: '1px solid rgba(0,0,0,0.05)'
+      }}>
         
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Add new cloth</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl"
-          >
-            x
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <h2 className="premium-title" style={{ fontSize: '24px', margin: 0 }}>Add New Item</h2>
+          <button className="close-modal" onClick={onClose}>×</button>
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 px-4 py-3 
-            rounded-xl mb-4 text-sm">
+          <div style={{ background: '#FEF2F2', color: '#DC2626', padding: '16px', borderRadius: '16px', marginBottom: '24px', fontSize: '14px' }}>
             {error}
           </div>
         )}
@@ -164,16 +183,29 @@ export default function UploadClothModal({ onClose, onSave }) {
         {/* Step 1 — Upload */}
         {step === 'upload' && (
           <div className="flex flex-col items-center gap-4">
-            <div className="w-full h-48 border-2 border-dashed 
-              border-gray-200 rounded-2xl flex flex-col items-center 
-              justify-center gap-3 cursor-pointer hover:border-gray-400
-              transition-all"
+            <div 
+              style={{
+                width: '100%',
+                height: '240px',
+                border: '2px dashed #E5E7EB',
+                borderRadius: '24px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.3s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = '#9CA3AF'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = '#E5E7EB'}
               onClick={() => document.getElementById('cloth-upload').click()}
             >
-              <p className="text-gray-400 text-sm">
-                Click to upload a photo of your cloth
+              <div style={{ fontSize: '32px' }}>📸</div>
+              <p style={{ color: '#6B7280', fontSize: '14px', fontWeight: '500' }}>
+                Tap to upload garment photo
               </p>
-              <p className="text-gray-300 text-xs">
+              <p style={{ color: '#9CA3AF', fontSize: '12px' }}>
                 JPG, PNG up to 10MB
               </p>
             </div>
@@ -190,10 +222,9 @@ export default function UploadClothModal({ onClose, onSave }) {
         {/* Step 2 — Searching */}
         {step === 'searching' && (
           <div className="flex flex-col items-center gap-4 py-8">
-            <div className="w-10 h-10 border-4 border-gray-200 
-              border-t-orange-400 rounded-full animate-spin"/>
-            <p className="text-gray-500">
-              Finding similar items...
+            <div className="premium-loader"></div>
+            <p className="premium-subtitle" style={{ fontSize: '15px' }}>
+              Identifying garment details...
             </p>
           </div>
         )}
@@ -201,88 +232,77 @@ export default function UploadClothModal({ onClose, onSave }) {
         {/* Step 3 — Select result */}
         {step === 'select' && (
           <div>
-            <p className="text-sm text-gray-500 mb-4">
-              Select the best matching image for your cloth:
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              {searchResults.map((result, i) => (
-                <div
-                  key={i}
-                  onClick={() => handleSelectResult(result)}
-                  className="cursor-pointer rounded-xl overflow-hidden 
-                    border-2 border-transparent hover:border-orange-400 
-                    transition-all"
-                >
-                  <img
-                    src={result.imageUrl}
-                    alt={result.title}
-                    className="w-full h-32 object-cover"
-                  />
-                  <p className="text-xs text-gray-500 p-1 truncate">
-                    {result.title}
-                  </p>
+            {detectedDetails && (
+              <div style={{ marginBottom: '24px', padding: '16px', background: '#F8F1F3', borderRadius: '20px', border: '1px solid rgba(120, 72, 84, 0.1)' }}>
+                <p style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--color-mauve)', marginBottom: '12px', letterSpacing: '0.1em' }}>
+                  AI Analysis Results
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {detectedDetails.brand && <span className="pill-small">🏷️ {detectedDetails.brand}</span>}
+                  {detectedDetails.garment && <span className="pill-small">👗 {detectedDetails.garment}</span>}
+                  {detectedDetails.material && <span className="pill-small">🧵 {detectedDetails.material}</span>}
                 </div>
-              ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button
+                onClick={() => setStep('upload')}
+                className="premium-button-secondary"
+                style={{ flex: 1, padding: '12px' }}
+              >
+                Upload Different
+              </button>
+              <button
+                onClick={() => handleSelectResult({}, false)}
+                className="premium-button-primary"
+                style={{ flex: 1.5, padding: '12px' }}
+              >
+                ✦ Generate Outfit
+              </button>
             </div>
-            <button
-              onClick={() => setStep('upload')}
-              className="mt-4 text-sm text-gray-400 hover:text-gray-600"
-            >
-              Upload different photo
-            </button>
           </div>
         )}
 
-        {/* Step 4 — Removing BG */}
-        {step === 'removing-bg' && (
+        {/* Step 4 — Generating Clean Shot */}
+        {step === 'generating-clean-shot' && (
           <div className="flex flex-col items-center gap-4 py-8">
-            <div className="w-10 h-10 border-4 border-gray-200 
-              border-t-teal-500 rounded-full animate-spin"/>
-            <p className="text-gray-500">
-              Removing background...
+            <div className="premium-loader"></div>
+            <p className="premium-subtitle" style={{ fontSize: '15px' }}>
+              Generating professional studio shot...
             </p>
+            <p style={{ fontSize: '12px', color: '#9CA3AF' }}>Creating model-less clean image</p>
           </div>
         )}
 
         {/* Step 5 — Enter details */}
         {step === 'details' && (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-6">
             {removedBgUrl && (
-              <div className="flex justify-center">
+              <div style={{ display: 'flex', justifyContent: 'center', background: '#F9FAFB', borderRadius: '24px', padding: '24px' }}>
                 <img
                   src={removedBgUrl}
                   alt="Cloth preview"
-                  className="h-48 object-contain bg-gray-50 
-                    rounded-xl p-2"
+                  style={{ height: '200px', objectContain: 'contain' }}
                 />
               </div>
             )}
             
-            <div>
-              <label className="text-sm text-gray-500 mb-1 block">
-                Cloth name
-              </label>
+            <div className="form-field">
+              <label>Cloth Name</label>
               <input
                 type="text"
                 value={clothName}
                 onChange={e => setClothName(e.target.value)}
-                placeholder="e.g. White casual shirt"
-                className="w-full border border-gray-200 rounded-xl 
-                  px-4 py-2 text-sm focus:outline-none 
-                  focus:border-gray-400"
+                placeholder="e.g. Vintage Leather Biker Jacket"
               />
             </div>
             
-            <div>
-              <label className="text-sm text-gray-500 mb-1 block">
-                Category
-              </label>
+            <div className="form-field">
+              <label>Category</label>
               <select
                 value={clothCategory}
                 onChange={e => setClothCategory(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl 
-                  px-4 py-2 text-sm focus:outline-none 
-                  focus:border-gray-400"
               >
                 {categories.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
@@ -292,11 +312,10 @@ export default function UploadClothModal({ onClose, onSave }) {
             
             <button
               onClick={handleSave}
-              className="w-full py-3 rounded-xl bg-gray-900 
-                text-white font-semibold hover:bg-gray-700 
-                transition-all"
+              className="premium-button-primary"
+              style={{ width: '100%', padding: '16px' }}
             >
-              Save to wardrobe
+              Add to Wardrobe
             </button>
           </div>
         )}

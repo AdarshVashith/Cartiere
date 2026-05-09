@@ -87,68 +87,81 @@ function ImageUploadStep({ user, faceScanResult, onComplete }) {
   };
 
   return (
-    <section className="card upload-card">
-      <p className="eyebrow">Step 2</p>
-      <h2>Upload full-body photos</h2>
-      <p className="muted">
-        After face scan, upload 2 clear full-body photos one by one.
-      </p>
+    <section className="bg-white rounded-[40px] shadow-sm border border-[#784854]/05 p-12 max-w-4xl mx-auto fade-in-up">
+      <header className="text-center mb-10">
+        <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-[#784854]/60 mb-3">Geometric reference</p>
+        <h2 className="text-4xl font-['Cormorant_Garamond'] font-bold text-[#1A1A1A] mb-4">Body Mapping</h2>
+        <p className="text-[#666] text-lg font-light max-w-lg mx-auto">
+          Upload clear full-body photos. These references allow our AI to tailor garment fits precisely to your silhouette.
+        </p>
+      </header>
 
-      <div className="scan-summary">
-        <span>
-          Expression: {faceScanResult?.dominantExpression || faceScanResult?.expression || "Unknown"}
-        </span>
-        <span>Face shape: {faceScanResult?.faceShape || "Unknown"}</span>
-        <span>Skin tone: {faceScanResult?.skinTone || "Unknown"}</span>
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        {[
+          { label: 'Baseline Tone', value: faceScanResult?.skinTone },
+          { label: 'Geometry', value: faceScanResult?.faceShape },
+          { label: 'Biometrics', value: faceScanResult?.dominantExpression }
+        ].map((stat, i) => (
+          <div key={i} className="bg-[#fcf6f7] rounded-2xl p-4 text-center">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#784854]/40 mb-1">{stat.label}</p>
+            <p className="font-bold text-[#784854] text-xs capitalize">{stat.value || 'Verified'}</p>
+          </div>
+        ))}
       </div>
 
-      <label className="upload-field">
-        Select photo {files.length + 1 > 2 ? 2 : files.length + 1} of 2
-        <input
-          type="file"
-          accept="image/*"
-          disabled={files.length >= 2 || loading || uploadedItems.length > 0}
-          onChange={handleFileSelection}
-        />
-      </label>
-
-      {files.length ? (
-        <div className="selected-files">
-          {files.map((file, index) => (
-            <div key={`${file.name}-${index}`} className="selected-file-item">
-              <span>{file.name}</span>
-              <button
-                type="button"
-                onClick={() => removeFile(index)}
-                disabled={loading || uploadedItems.length > 0}
-              >
-                Remove
-              </button>
+      <div className="flex flex-col gap-6">
+        <label className={`relative group cursor-pointer border-2 border-dashed rounded-[32px] p-12 transition-all ${files.length >= 2 ? 'border-[#784854]/10 bg-[#fcf6f7]/50' : 'border-[#784854]/20 hover:border-[#784854] hover:bg-[#fcf6f7]'}`}>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={files.length >= 2 || loading || uploadedItems.length > 0}
+            onChange={handleFileSelection}
+          />
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-2xl shadow-sm text-[#784854]">
+              {files.length >= 2 ? '✓' : '+'}
             </div>
-          ))}
-        </div>
-      ) : null}
+            <div>
+              <p className="font-bold text-[#1A1A1A]">
+                {files.length >= 2 ? 'Capacity Reached' : `Select Photo ${files.length + 1} of 2`}
+              </p>
+              <p className="text-[#666] text-sm mt-1">High-resolution portraits preferred.</p>
+            </div>
+          </div>
+        </label>
 
-      <button
-        type="button"
-        className="primary-button"
-        onClick={handleUpload}
-        disabled={loading || uploadedItems.length > 0}
-      >
-        {loading ? "Uploading..." : uploadedItems.length ? "Uploaded" : "Upload photos"}
-      </button>
+        {files.length > 0 && (
+          <div className="grid grid-cols-2 gap-4">
+            {files.map((file, index) => (
+              <div key={index} className="bg-white rounded-2xl p-4 border border-[#784854]/10 flex items-center justify-between shadow-sm fade-in">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="w-10 h-10 rounded-lg bg-[#fcf6f7] flex items-center justify-center text-[#784854]">🖼</div>
+                  <p className="text-sm font-medium text-[#1A1A1A] truncate">{file.name}</p>
+                </div>
+                <button
+                  onClick={() => removeFile(index)}
+                  disabled={loading || uploadedItems.length > 0}
+                  className="text-[#e74c3c] text-xs font-bold hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
-      {status ? <p className="status-text">{status}</p> : null}
+        <button
+          type="button"
+          className="premium-button-primary w-full py-5 rounded-2xl bg-[#1A1A1A] text-white font-bold hover:bg-[#784854] transition-all shadow-xl hover:shadow-[#784854]/20 mt-4"
+          onClick={handleUpload}
+          disabled={loading || uploadedItems.length > 0 || files.length !== 2}
+        >
+          {loading ? "Establishing Link..." : uploadedItems.length ? "Files Synchronized" : "Upload References"}
+        </button>
 
-      {uploadedItems.length ? (
-        <div className="upload-results">
-          {uploadedItems.map((item) => (
-            <a key={item.downloadURL} href={item.downloadURL} target="_blank" rel="noreferrer">
-              {item.name}
-            </a>
-          ))}
-        </div>
-      ) : null}
+        {status && <p className="text-center text-sm font-medium text-[#784854]/60">{status}</p>}
+      </div>
     </section>
   );
 }

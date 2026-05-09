@@ -5,7 +5,9 @@ import { db, auth } from '../firebase/firebase'
 import { useNavigate } from 'react-router-dom'
 import { uploadToCloudinary } from '../utils/cloudinary'
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || ''
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL && !window.location.hostname.includes('vercel.app') 
+  ? import.meta.env.VITE_BACKEND_URL 
+  : ''
 
 export default function GenerateModel() {
   const navigate = useNavigate()
@@ -30,8 +32,8 @@ export default function GenerateModel() {
         console.log('User confirmed:', firebaseUser.uid)
         setUser(firebaseUser)
       } else {
-        console.log('No user, redirecting to login')
-        navigate('/login')
+        console.log('No user, redirecting to landing')
+        navigate('/')
       }
       setAuthLoading(false)
     })
@@ -75,41 +77,135 @@ export default function GenerateModel() {
     fetchProfile()
   }, [user])
 
+  // Helper: fetch an image URL and convert to base64
+  const fetchImageAsBase64 = async (url) => {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    
+    // Resize image to speed up upload and processing
+    const img = await new Promise((resolve) => {
+      const i = new Image()
+      i.crossOrigin = "anonymous"
+      i.onload = () => resolve(i)
+      i.src = URL.createObjectURL(blob)
+    })
+
+    const canvas = document.createElement('canvas')
+    const MAX_SIZE = 768
+    let width = img.width
+    let height = img.height
+
+    if (width > height) {
+      if (width > MAX_SIZE) {
+        height *= MAX_SIZE / width
+        width = MAX_SIZE
+      }
+    } else {
+      if (height > MAX_SIZE) {
+        width *= MAX_SIZE / height
+        height = MAX_SIZE
+      }
+    }
+
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(img, 0, 0, width, height)
+
+    const b64WithPrefix = canvas.toDataURL('image/jpeg', 0.8)
+    const b64 = b64WithPrefix.split(',')[1]
+    return { base64: b64, mimeType: 'image/jpeg' }
+  }
+
   const generateAvatar = async () => {
     setError(null)
     setGenerating(true)
     setStep('generating')
     setAvatarUrl(null)
-    setLoadingMessage('Starting generation...')
+    setLoadingMessage('Preparing your face photo...')
+
+    const GEMINI_MODEL = 'gemini-2.5-flash-image';
+    const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyDNsHj_YFjj3naCzxLagUU7IVMFV9fSbTw'
 
     try {
-      console.log('Sending request to backend...')
-      setLoadingMessage('Sending your photo to AI...')
+      if (!GEMINI_API_KEY || GEMINI_API_KEY.length < 10) {
+        throw new Error('Valid Gemini API key not found. Please check your environment variables.');
+      }
+      // Step 1: Fetch user's face photo and convert to base64
+      console.log('Fetching face photo:', profile.facePhotoUrl)
+      const faceImage = await fetchImageAsBase64(profile.facePhotoUrl)
+      console.log('Face photo loaded, mimeType:', faceImage.mimeType)
 
-      const response = await fetch(
-        `${BACKEND_URL}/api/generate-avatar`,
+      setLoadingMessage('Sending your face to Gemini AI...')
+
+      const prompt = `LITERAL BIOMETRIC REPRODUCTION - HEAD TO TOE.
+1. FACE IDENTITY: This is a technical 1:1 mapping. Reproduce the EXACT facial features, structure, and identity of the person in the reference photo. ZERO beautification or averaging allowed.
+2. FULL BODY VIEW: The image MUST show the entire person from the top of the head down to the shoes.
+3. FEET & SHOES: The feet and stylish footwear must be clearly visible in the frame.
+4. NO WHITE BORDERS: The studio background must fill the ENTIRE frame. Strictly NO white margins, NO top borders, and NO empty white space at the top of the image.
+5. BODY CREDENTIALS:
+   - Gender: ${profile.gender}
+   - Build: ${profile.bodyType}
+   - Height: ${profile.height}cm
+   - Weight: ${profile.weight}kg
+6. POSE: Standing perfectly straight, facing forward, arms at sides.
+7. BACKGROUND: Neutral studio gray.
+
+Ensure the entire body is centered and the face is unmistakably the same individual.`
+
+      // Step 2: Send multimodal request (face photo + prompt) to Gemini
+      let response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            facePhotoUrl: profile.facePhotoUrl,
-            gender: profile.gender,
-            bodyType: profile.bodyType,
-            height: profile.height,
-            age: profile.age
+            contents: [{
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: faceImage.mimeType,
+                    data: faceImage.base64
+                  }
+                },
+                { text: prompt }
+              ]
+            }],
+            generationConfig: {
+              responseModalities: ['IMAGE']
+            }
           })
         }
       )
 
-      setLoadingMessage('AI is generating your avatar... please wait')
+      setLoadingMessage('Gemini is crafting your personalized avatar...')
+
+      if (!response.ok) {
+        const errText = await response.text()
+        console.error('Gemini error:', errText)
+        throw new Error(`Gemini API returned status ${response.status}`)
+      }
 
       const data = await response.json()
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Generation failed')
+      // Step 3: Extract generated image from response
+      let imageDataUrl = null
+      const candidates = data?.candidates || []
+      for (const candidate of candidates) {
+        const parts = candidate?.content?.parts || []
+        for (const part of parts) {
+          if (part?.inlineData?.mimeType?.startsWith('image/')) {
+            imageDataUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`
+            break
+          }
+        }
+        if (imageDataUrl) break
       }
 
-      const imageDataUrl = `data:image/jpeg;base64,${data.base64}`
+      if (!imageDataUrl) {
+        throw new Error('Gemini did not return an image. Please try again.')
+      }
+
       setAvatarUrl(imageDataUrl)
       setAvatarBase64(imageDataUrl)
       setGenerating(false)
@@ -122,6 +218,7 @@ export default function GenerateModel() {
       setStep('ready')
     }
   }
+
 
   const confirmAvatar = async () => {
     setUploading(true)
@@ -170,205 +267,156 @@ export default function GenerateModel() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col 
-      items-center justify-center p-8">
-      <div className="max-w-2xl w-full">
-
-        {/* Header */}
-        <div className="text-center mb-8">
-          <p className="text-xs text-teal-600 font-semibold 
-            tracking-widest mb-2">ALMOST DONE</p>
-          <h1 className="text-4xl font-bold mb-2">Your AI avatar</h1>
-          <p className="text-gray-400 text-sm">
-            We generate a realistic full body avatar using 
-            your face photo and body details
+    <div className="min-h-screen bg-[#FFFAF2] flex flex-col items-center py-12 px-6 font-['Outfit']">
+      <div className="max-w-4xl w-full flex flex-col items-center">
+        
+        {/* Header Section */}
+        <header className="text-center mb-12 fade-in-down">
+          <p className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#784854]/50 mb-3">AI Fashion Studio</p>
+          <h1 className="text-5xl md:text-6xl font-['Cormorant_Garamond'] font-bold text-[#1A1A1A] mb-4">Your Digital Twin</h1>
+          <p className="text-[#666] text-lg font-light max-w-lg mx-auto leading-relaxed">
+            Synthesizing a high-fidelity 3D-aware avatar based on your unique biometric profile and physical credentials.
           </p>
+        </header>
+
+        <div className="w-full grid md:grid-cols-12 gap-8 items-start">
+          
+          {/* Left Column: Stats & Biometrics */}
+          <div className="md:col-span-5 space-y-6 fade-in-up" style={{ animationDelay: '0.1s' }}>
+            
+            {/* Credentials Card */}
+            <div className="bg-white rounded-[32px] p-8 shadow-[0_4px_20px_rgba(120,72,84,0.03)] border border-[#784854]/05">
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#784854]/40 mb-6 border-b border-[#784854]/10 pb-4">Physical Credentials</h3>
+              <div className="grid grid-cols-2 gap-y-8 gap-x-4">
+                {[
+                  { label: 'Gender', value: profile?.gender },
+                  { label: 'Build', value: profile?.bodyType },
+                  { label: 'Height', value: profile?.height + 'cm' },
+                  { label: 'Weight', value: profile?.weight + 'kg' },
+                  { label: 'Age', value: profile?.age + ' yrs' },
+                  { label: 'Shape', value: profile?.faceShape },
+                ].map((item, i) => (
+                  <div key={i}>
+                    <p className="text-[10px] font-bold uppercase text-[#784854]/30 mb-1">{item.label}</p>
+                    <p className="font-semibold text-[#1A1A1A] text-base capitalize">{item.value || '—'}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Reference Card */}
+            <div className="bg-white rounded-[32px] p-6 shadow-[0_4px_20px_rgba(120,72,84,0.03)] border border-[#784854]/05 flex items-center gap-5">
+              <div className="relative flex-shrink-0">
+                <img src={profile?.facePhotoUrl} alt="Reference" className="w-16 h-16 rounded-full object-cover grayscale-[0.3]" />
+                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#784854] rounded-full border-2 border-white flex items-center justify-center text-[8px] text-white">✓</div>
+              </div>
+              <div>
+                <p className="font-bold text-[#1A1A1A] text-sm">Biometric Scan Active</p>
+                <p className="text-[#666] text-xs leading-normal">Facial mapping coordinates verified for high-accuracy reconstruction.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Generation Area */}
+          <div className="md:col-span-7 fade-in-up" style={{ animationDelay: '0.2s' }}>
+            
+            {/* Action Area */}
+            <div className="bg-white rounded-[40px] p-8 md:p-12 shadow-[0_20px_50px_rgba(120,72,84,0.05)] border border-[#784854]/05 flex flex-col items-center justify-center min-h-[500px] relative overflow-hidden">
+              
+              {step === 'ready' && !generating && (
+                <div className="text-center">
+                  <div className="w-20 h-20 bg-[#F9F6F7] rounded-full flex items-center justify-center mx-auto mb-8">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#784854" strokeWidth="1.5">
+                      <path d="M12 4V20M20 12L4 12" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                  <h2 className="text-3xl font-['Cormorant_Garamond'] font-bold text-[#1A1A1A] mb-6">Ready for Synthesis</h2>
+                  <button 
+                    onClick={generateAvatar} 
+                    className="px-12 py-5 rounded-2xl bg-[#1A1A1A] text-white font-bold text-lg hover:bg-[#784854] transition-all shadow-xl hover:shadow-[#784854]/20 active:scale-[0.98]"
+                  >
+                    Generate My Avatar
+                  </button>
+                </div>
+              )}
+
+              {generating && (
+                <div className="flex flex-col items-center gap-8 text-center px-4">
+                  <div className="premium-loader"></div>
+                  <div>
+                    <h3 className="text-2xl font-['Cormorant_Garamond'] font-bold text-[#1A1A1A] mb-2">{loadingMessage}</h3>
+                    <p className="text-[#666] text-sm max-w-xs">Our AI is mapping your facial geometry onto a custom-built digital body.</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-[9px] font-bold tracking-[0.2em] uppercase text-[#784854]/30">
+                    <span className="w-1 h-1 bg-[#784854]/30 rounded-full animate-ping"></span>
+                    Neural Engine Active
+                  </div>
+                </div>
+              )}
+
+              {avatarUrl && step === 'confirm' && (
+                <div className="w-full flex flex-col items-center">
+                  <div className="relative group mb-8">
+                    <img src={avatarUrl} alt="Generated Avatar" className="w-64 md:w-72 h-auto aspect-[2/3] object-cover rounded-[32px] shadow-2xl transition-transform duration-700 group-hover:scale-[1.02]" />
+                    <div className="absolute inset-0 rounded-[32px] ring-1 ring-inset ring-black/10"></div>
+                  </div>
+                  <div className="flex flex-col md:flex-row gap-4 w-full">
+                    <button onClick={generateAvatar} className="flex-1 py-4 rounded-xl border border-[#1A1A1A]/10 text-[#1A1A1A] font-bold text-sm hover:bg-gray-50 transition-all">Regenerate</button>
+                    <button onClick={confirmAvatar} className="flex-[2] py-4 rounded-xl bg-[#1A1A1A] text-white font-bold text-sm hover:bg-[#784854] transition-all shadow-lg">Confirm Identity</button>
+                  </div>
+                </div>
+              )}
+
+              {step === 'uploading' && (
+                <div className="flex flex-col items-center gap-6">
+                  <div className="premium-loader"></div>
+                  <p className="font-bold text-[#1A1A1A] animate-pulse">Syncing to cloud...</p>
+                </div>
+              )}
+
+              {step === 'done' && (
+                <div className="text-center scale-up">
+                  <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-8 text-3xl shadow-inner">✓</div>
+                  <h2 className="text-4xl font-['Cormorant_Garamond'] font-bold text-[#1A1A1A] mb-4">Identity Secured</h2>
+                  <p className="text-[#666] mb-8">Redirecting you to your personalized wardrobe experience.</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Profile summary */}
-        {profile && (
-          <div className="bg-white rounded-2xl border border-gray-100 
-            p-4 mb-6 flex flex-wrap gap-2 justify-center">
-            {[
-              { label: 'Gender', value: profile.gender },
-              { label: 'Body type', value: profile.bodyType },
-              { label: 'Height', value: profile.height + ' cm' },
-              { label: 'Weight', value: profile.weight + ' kg' },
-              { label: 'Age', value: profile.age },
-              { label: 'Face shape', value: profile.faceShape },
-            ].map((item, i) => (
-              <div key={i} className="bg-gray-50 rounded-xl 
-                px-4 py-2 text-center min-w-fit">
-                <p className="text-xs text-gray-400">{item.label}</p>
-                <p className="font-semibold text-sm capitalize">
-                  {item.value}
-                </p>
-              </div>
-            ))}
-            <div className="bg-gray-50 rounded-xl px-4 py-2 
-              flex items-center gap-2">
-              <div
-                className="w-5 h-5 rounded-full border border-gray-200"
-                style={{ backgroundColor: profile.skinTone }}
-              />
-              <div>
-                <p className="text-xs text-gray-400">Skin tone</p>
-                <p className="font-mono text-xs">{profile.skinTone}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Face photo preview */}
-        {profile?.facePhotoUrl && (
-          <div className="bg-white rounded-2xl border border-gray-100 
-            p-4 mb-6 flex items-center gap-4">
-            <img
-              src={profile.facePhotoUrl}
-              alt="Your face"
-              className="w-16 h-16 rounded-full object-cover 
-                border-2 border-orange-200"
-            />
-            <div>
-              <p className="font-semibold text-sm">Face reference ready</p>
-              <p className="text-gray-400 text-xs">
-                AI will use this photo to generate your avatar
-              </p>
-            </div>
-            <div className="ml-auto w-3 h-3 bg-green-400 rounded-full"/>
-          </div>
-        )}
-
-        {/* Error */}
         {error && (
-          <div className="bg-red-50 border border-red-100 
-            text-red-600 px-4 py-3 rounded-xl mb-6 text-sm">
+          <div className="mt-8 bg-red-50 text-red-700 px-8 py-4 rounded-2xl border border-red-100 font-medium text-sm fade-in">
             {error}
           </div>
         )}
 
-        {/* Generating state */}
-        {generating && (
-          <div className="bg-white rounded-2xl border border-gray-100 
-            p-12 flex flex-col items-center gap-6 mb-6">
-            <div className="relative">
-              <div className="w-20 h-20 border-4 border-gray-100 
-                border-t-orange-400 rounded-full animate-spin"/>
-              <div className="absolute inset-0 flex items-center 
-                justify-center text-2xl">
-                AI
-              </div>
-            </div>
-            <div className="text-center">
-              <p className="font-semibold text-lg mb-1">
-                {loadingMessage}
-              </p>
-              <p className="text-gray-400 text-sm">
-                Flux Kontext Pro is analyzing your face and 
-                generating your avatar
-              </p>
-            </div>
-            <div className="w-full bg-gray-100 rounded-full h-1.5">
-              <div className="bg-orange-400 h-1.5 rounded-full 
-                animate-pulse" style={{ width: '70%' }}/>
-            </div>
-            <p className="text-xs text-gray-400">
-              Please do not close this page
-            </p>
-          </div>
-        )}
-
-        {/* Avatar result */}
-        {avatarUrl && step === 'confirm' && (
-          <div className="bg-white rounded-2xl border border-gray-100 
-            p-6 flex flex-col items-center gap-6 mb-6">
-            <img
-              src={avatarUrl}
-              alt="Your AI avatar"
-              className="w-72 h-96 object-contain rounded-xl 
-                bg-gray-50 border border-gray-100"
-            />
-            <div className="text-center">
-              <p className="font-semibold text-lg mb-1">
-                Does this look right?
-              </p>
-              <p className="text-gray-400 text-sm">
-                If not happy, regenerate for a different result
-              </p>
-            </div>
-            <div className="flex gap-4 w-full">
-              <button
-                onClick={generateAvatar}
-                className="flex-1 py-3 rounded-xl border border-gray-200
-                  font-semibold text-gray-600 hover:bg-gray-50 
-                  transition-all text-sm"
-              >
-                Regenerate
-              </button>
-              <button
-                onClick={confirmAvatar}
-                className="flex-1 py-3 rounded-xl bg-gray-900 
-                  text-white font-semibold hover:bg-gray-700 
-                  transition-all text-sm"
-              >
-                Yes, use this avatar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Uploading state */}
-        {step === 'uploading' && (
-          <div className="bg-white rounded-2xl border border-gray-100 
-            p-8 flex flex-col items-center gap-4 mb-6">
-            <div className="w-10 h-10 border-4 border-gray-200 
-              border-t-teal-500 rounded-full animate-spin"/>
-            <p className="font-semibold">Saving your avatar...</p>
-            <p className="text-gray-400 text-sm">Just a moment</p>
-          </div>
-        )}
-
-        {/* Done state */}
-        {step === 'done' && (
-          <div className="bg-green-50 border border-green-100 
-            rounded-2xl p-8 flex flex-col items-center gap-3 mb-6">
-            <div className="w-14 h-14 bg-green-500 rounded-full 
-              flex items-center justify-center text-white text-2xl 
-              font-bold">
-              ✓
-            </div>
-            <p className="font-semibold text-green-800 text-lg">
-              Avatar saved successfully
-            </p>
-            <p className="text-green-600 text-sm">
-              Redirecting to your home page...
-            </p>
-          </div>
-        )}
-
-        {/* Generate button */}
-        {step === 'ready' && !profileLoading && (
-          <button
-            onClick={generateAvatar}
-            className="w-full py-4 rounded-2xl bg-gray-900 
-              text-white font-semibold text-lg 
-              hover:bg-gray-700 transition-all"
-          >
-            Generate my avatar
-          </button>
-        )}
-
-        {/* Profile loading */}
-        {profileLoading && !error && (
-          <div className="flex items-center justify-center gap-3 
-            text-gray-400 py-8">
-            <div className="w-5 h-5 border-2 border-gray-300 
-              border-t-gray-600 rounded-full animate-spin"/>
-            <span className="text-sm">Loading your profile...</span>
-          </div>
-        )}
-
       </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes scaleUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .premium-loader {
+          width: 56px;
+          height: 56px;
+          border: 2px solid #78485410;
+          border-top: 2px solid #784854;
+          border-radius: 50%;
+          animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        .fade-in { animation: fadeIn 0.6s ease-out forwards; }
+        .fade-in-up { animation: fadeIn 0.8s ease-out forwards; }
+        .fade-in-down { animation: fadeIn 0.8s ease-out forwards; }
+        .scale-up { animation: scaleUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+        @media (max-width: 768px) {
+          header h1 { font-size: 3rem; }
+          .grid { gap: 1.5rem; }
+        }
+      `}</style>
     </div>
   )
 }
