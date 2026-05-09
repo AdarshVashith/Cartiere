@@ -57,9 +57,7 @@ const HeaderNav = () => {
         </div>
 
         <div className="header-actions-right">
-          <div className="search-trigger">
-             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          </div>
+
           <div className="nav-profile-trigger" onClick={() => navigate('/me')}>
             {profile?.avatarUrl && typeof profile.avatarUrl === 'string' ? (
               <img src={profile.avatarUrl} alt="Avatar" className="header-avatar" />
