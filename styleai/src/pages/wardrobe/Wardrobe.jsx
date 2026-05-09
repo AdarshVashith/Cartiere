@@ -23,7 +23,7 @@ export default function Wardrobe() {
   const [seedingLoading, setSeedingLoading] = useState(false)
 
   const categories = [
-    'All', 'Top', 'Bottom', 'Dress', 
+    'All', 'Wear Cycle', 'Top', 'Bottom', 'Dress', 
     'Jacket', 'Shoes', 'Accessory'
   ]
 
@@ -303,7 +303,9 @@ export default function Wardrobe() {
 
   const filteredWardrobe = filterCategory === 'All'
     ? wardrobe
-    : wardrobe.filter(c => c.category === filterCategory)
+    : filterCategory === 'Wear Cycle'
+      ? [...wardrobe].sort((a, b) => (b.wearCount || 0) - (a.wearCount || 0))
+      : wardrobe.filter(c => c.category === filterCategory)
 
   if (loading) {
     return (
@@ -401,7 +403,7 @@ export default function Wardrobe() {
               >
                 {cat}
                 <span className="cat-count">
-                  {cat === 'All' ? wardrobe.length : wardrobe.filter(i => i.category === cat).length}
+                  {cat === 'All' || cat === 'Wear Cycle' ? wardrobe.length : wardrobe.filter(i => i.category === cat).length}
                 </span>
               </button>
             ))}
