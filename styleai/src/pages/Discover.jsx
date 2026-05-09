@@ -22,6 +22,8 @@ function buildDiscoverCacheKey(userId, wardrobe, profile) {
   return `discover-cache:${userId}:${wardrobeSignature}:${profileSignature}`
 }
 
+import './Discover.css';
+
 export default function Discover() {
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL && !window.location.hostname.includes('vercel.app') 
     ? import.meta.env.VITE_BACKEND_URL 
@@ -107,12 +109,12 @@ export default function Discover() {
   }
 
   const handleTryOn = async (itemOverride = null) => {
-    if (tryOnLoading) return; // Prevent double clicks
+    if (tryOnLoading) return;
     const activeItem = itemOverride || tryOnItem
     if (!activeItem) return;
     
     if (!avatarUrl) {
-      setTryOnError('Please create your AI Avatar first to use Virtual Try-On.');
+      setTryOnError('Please create your AI Avatar first.');
       return;
     }
 
@@ -148,10 +150,13 @@ export default function Discover() {
   return (
     <MainLayout>
       <div className="discover-content-wrap">
-        <header className="top-header fade-in-down">
-          <div className="greeting-text">
+        <header className="discover-header fade-in-down">
+          <div className="discover-title-section">
             <h1 className="premium-title">Discover</h1>
             <p className="premium-subtitle">AI-curated recommendations for your unique style</p>
+          </div>
+          <div className="header-actions">
+             {refreshing && <span className="refresh-status">Updating...</span>}
           </div>
         </header>
 
@@ -176,35 +181,34 @@ export default function Discover() {
         <div className="discover-grid-wrap fade-in-up" style={{ animationDelay: '0.2s' }}>
           <div className="wardrobe-grid-premium">
             {filteredItems.map((item, index) => (
-              <article key={index} className="cloth-card-premium">
-                <div className="card-img-wrap">
+              <article key={index} className="discover-card">
+                <div className="discover-img-wrap">
                   <img src={item.productImageUrl || item.imageUrl} alt={item.name} />
-                  <div className="card-badge badge-cat" style={{ background: 'var(--teal)', color: 'white' }}>
+                  <div className="match-badge">
                     {item.matchScore}% Match
                   </div>
                   <button
                     onClick={() => handleSaveToWishlist(item)}
-                    className="card-badge badge-worn"
-                    style={{ background: 'white', color: 'var(--mauve)', cursor: 'pointer', border: 'none' }}
+                    className="wishlist-btn"
                   >
                     {savingId === item.name ? '...' : '♡'}
                   </button>
                 </div>
-                <div className="card-info">
-                  <h4 className="cloth-name" style={{ fontSize: '16px' }}>{item.name}</h4>
-                  <p className="cloth-meta" style={{ height: '40px', overflow: 'hidden' }}>{item.reason}</p>
-                  <div className="card-actions">
+                <div className="discover-info">
+                  <h4 className="item-name">{item.name}</h4>
+                  <p className="item-reason">{item.reason}</p>
+                  <div className="discover-actions">
                     <button 
                       onClick={() => window.open(item.productLink || item.link, '_blank')}
-                      className="action-btn btn-worn"
+                      className="discover-btn btn-shop"
                     >
                       Shop · ${item.estimatedPrice}
                     </button>
                     <button 
                       onClick={() => { setTryOnItem(item); handleTryOn(item) }}
-                      className="action-btn btn-try"
+                      className="discover-btn btn-vto"
                     >
-                      Try On
+                      Try On ✦
                     </button>
                   </div>
                 </div>
