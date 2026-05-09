@@ -140,8 +140,8 @@ export default function GenerateOutfit() {
       if (profile.avatarUrl) {
         setPreviewLoading(true);
         try {
-          const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyDNsHj_YFjj3naCzxLagUU7IVMFV9fSbTw';
-          const MODEL = 'gemini-2.5-flash-image'; // Use the fast image generation model
+          const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+          const MODEL = 'gemini-2.0-flash'; // Use the fast image generation model
           
           // Helper to fetch images as base64
           const fetchB64 = async (url) => {

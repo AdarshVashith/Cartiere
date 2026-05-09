@@ -1,5 +1,5 @@
 export const runFrontendVTO = async (avatarUrl, clothImageUrl, category, clothName) => {
-  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyDNsHj_YFjj3naCzxLagUU7IVMFV9fSbTw';
+  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
   const MODEL = 'gemini-2.0-flash'; 
 
   console.log('Starting Frontend VTO...', { category, clothName, model: MODEL });
@@ -123,7 +123,7 @@ Generate a high-resolution professional fashion image of the person from Image 1
  * Uses Gemini 2.5 Flash Image for high-fidelity reconstruction.
  */
 export const generateCleanGarmentImage = async (originalImageUrl, description) => {
-  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyDNsHj_YFjj3naCzxLagUU7IVMFV9fSbTw';
+  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
   const MODEL = 'gemini-2.0-flash';
 
   console.log('Generating Clean Garment Image via Gemini (Text-to-Image)...', { description });

@@ -125,7 +125,7 @@ export default function GenerateModel() {
     setLoadingMessage('Preparing your face photo...')
 
     const GEMINI_MODEL = 'gemini-2.0-flash';
-    const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyDNsHj_YFjj3naCzxLagUU7IVMFV9fSbTw'
+    const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
     try {
       if (!GEMINI_API_KEY || GEMINI_API_KEY.length < 10) {

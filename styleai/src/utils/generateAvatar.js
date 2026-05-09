@@ -2,7 +2,7 @@
 // Generates a unique 2D avatar per user using Google Gemini image generation API.
 // Falls back to DiceBear if Gemini fails.
 
-const GEMINI_API_KEY = 'AIzaSyB3XD2wzc51dbtoFyko1Gbhfuvry892QVc';
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_MODEL = 'gemini-2.0-flash';
 
 /**
