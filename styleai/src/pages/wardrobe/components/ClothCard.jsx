@@ -14,13 +14,9 @@ export default function ClothCard({ cloth, onTryOn, onWorn, onDelete, onToggleFr
         {/* Wear Cycle Meter */}
         <div className="wear-cycle-meter-wrap">
           <div className="meter-label">Cycle Progress</div>
-          <div className="meter-segments">
-            {[...Array(5)].map((_, i) => (
-              <div 
-                key={i} 
-                className={`meter-segment ${i < (cloth.wearCount % 5 || (cloth.wearCount > 0 ? 5 : 0)) ? 'active' : ''}`}
-              />
-            ))}
+          <div className="meter-value">
+            <span className="current-wears">{cloth.wearCount || 0}</span>
+            <span className="wears-label"> Wears</span>
           </div>
         </div>
         

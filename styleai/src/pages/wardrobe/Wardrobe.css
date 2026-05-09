@@ -410,22 +410,25 @@
   color: var(--text-secondary);
 }
 
-.meter-segments {
+.meter-value {
   display: flex;
-  gap: 3px;
+  align-items: baseline;
+  gap: 4px;
 }
 
-.meter-segment {
-  width: 14px;
-  height: 4px;
-  background: var(--bg-secondary);
-  border-radius: 2px;
-  transition: all 0.4s ease;
+.current-wears {
+  font-family: var(--font-editorial);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--mauve);
+  line-height: 1;
 }
 
-.meter-segment.active {
-  background: var(--mauve);
-  box-shadow: 0 0 8px var(--mauve-soft);
+.wears-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
 }
 
 .badge-frozen {
