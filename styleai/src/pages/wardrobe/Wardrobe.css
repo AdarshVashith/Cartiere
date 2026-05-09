@@ -304,7 +304,61 @@
 }
 
 
-/* TryOn Modal Premium */
+.cloth-card-premium.is-frozen {
+  opacity: 0.8;
+  filter: grayscale(0.2);
+}
+
+.badge-frozen {
+  background: #E0F2FE;
+  color: #0369A1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-freeze {
+  background: white;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.btn-freeze.active {
+  background: #E0F2FE;
+  border-color: #0369A1;
+  color: #0369A1;
+}
+
+.wear-cycle-section {
+  background: white;
+  border-radius: 24px;
+  padding: 32px;
+  border: 1px solid var(--border);
+  margin-bottom: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.wear-cycle-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wear-cycle-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .wear-cycle-stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
 .tryon-split-modal {
   display: flex;
   max-width: 1000px !important;

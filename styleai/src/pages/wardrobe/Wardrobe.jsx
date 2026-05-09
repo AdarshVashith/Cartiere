@@ -113,6 +113,20 @@ export default function Wardrobe() {
     }
   }
 
+  const handleToggleFreeze = async (clothId, isFrozen) => {
+    try {
+      await updateDoc(
+        doc(db, 'users', user.uid, 'wardrobe', clothId),
+        { isFrozen }
+      )
+      setWardrobe(prev => prev.map(c =>
+        c.id === clothId ? { ...c, isFrozen } : c
+      ))
+    } catch (err) {
+      setError('Failed to update status: ' + err.message)
+    }
+  }
+
   const handleTryOn = (cloth) => {
     setSelectedCloth(cloth)
     setShowTryOn(true)
@@ -324,8 +338,34 @@ export default function Wardrobe() {
           </div>
         </header>
 
+      {/* Wear Cycle Tracker */}
+      <section className="wear-cycle-section fade-in-up" style={{ animationDelay: '0.1s' }}>
+        <div className="wear-cycle-header">
+          <h3 className="gen-section-title" style={{ border: 'none', padding: 0, margin: 0 }}>Wear Cycle Analysis</h3>
+          <span className="pill-small" style={{ background: 'var(--mauve-soft)', color: 'var(--mauve)' }}>Active Cycle</span>
+        </div>
+        <div className="wear-cycle-stats">
+          <div className="stat-card-mini">
+            <span className="stat-lbl">Total Wears</span>
+            <span className="stat-val">{wardrobe.reduce((acc, curr) => acc + (curr.wearCount || 0), 0)}</span>
+          </div>
+          <div className="stat-card-mini">
+            <span className="stat-lbl">Frozen Items</span>
+            <span className="stat-val">{wardrobe.filter(i => i.isFrozen).length}</span>
+          </div>
+          <div className="stat-card-mini">
+            <span className="stat-lbl">Utilization</span>
+            <span className="stat-val">
+              {wardrobe.length > 0 
+                ? Math.round((wardrobe.filter(i => (i.wearCount || 0) > 0).length / wardrobe.length) * 100) 
+                : 0}%
+            </span>
+          </div>
+        </div>
+      </section>
+
       {/* Category filter */}
-      <div className="filter-scroll-wrap fade-in-up" style={{ animationDelay: '0.1s' }}>
+      <div className="filter-scroll-wrap fade-in-up" style={{ animationDelay: '0.2s' }}>
         {categories.map(cat => (
           <button
             key={cat}
@@ -335,33 +375,6 @@ export default function Wardrobe() {
             {cat}
           </button>
         ))}
-      </div>
-
-      {/* Stats bar */}
-      <div className="stats-row-wardrobe fade-in-up" style={{ animationDelay: '0.2s' }}>
-        <div className="stat-card-mini">
-          <span className="stat-val">{wardrobe.length}</span>
-          <span className="stat-lbl">Total Items</span>
-        </div>
-        <div className="stat-card-mini">
-          <span className="stat-val">
-            {wardrobe.length > 0
-              ? wardrobe.sort((a,b) => (b.wearCount||0) - (a.wearCount||0))[0]?.wearCount || 0
-              : 0
-            }
-          </span>
-          <span className="stat-lbl">Top Wear Count</span>
-        </div>
-        <div className="stat-card-mini">
-          <span className="stat-val">
-            {wardrobe.filter(c => {
-              if (!c.lastWorn) return true
-              const diff = Date.now() - new Date(c.lastWorn).getTime()
-              return diff > 30 * 24 * 60 * 60 * 1000
-            }).length}
-          </span>
-          <span className="stat-lbl">Dormant (30d+)</span>
-        </div>
       </div>
 
       {/* Error */}
@@ -388,6 +401,7 @@ export default function Wardrobe() {
                 onTryOn={handleTryOn}
                 onWorn={handleWorn}
                 onDelete={handleDeleteCloth}
+                onToggleFreeze={handleToggleFreeze}
               />
             ))}
           </div>

@@ -68,7 +68,8 @@ export default function GenerateOutfit() {
           name: String(doc.data().name || 'Untitled'),
           category: String(doc.data().category || 'Other'),
           imageUrl: String(doc.data().imageUrl || ''),
-          color: String(doc.data().color || '#000000')
+          color: String(doc.data().color || '#000000'),
+          isFrozen: !!doc.data().isFrozen
         })));
         
         setLoading(false);
@@ -85,7 +86,8 @@ export default function GenerateOutfit() {
     setScreen('generating');
     
     try {
-      const wardrobeText = wardrobe.map(i => `${i.name} (${i.category})`).join(', ');
+      const activeWardrobe = wardrobe.filter(i => !i.isFrozen);
+      const wardrobeText = activeWardrobe.map(i => `${i.name} (${i.category})`).join(', ');
       const prompt = `Style Request: ${occasion} look for ${timeOfDay}. 
       Wardrobe: ${wardrobeText}. 
       Skin Tone: ${profile.skinTone}. 
@@ -222,6 +224,35 @@ Generate a high-resolution professional fashion image of the EXACT person from R
     } catch (err) {
       console.error("Generation failed:", err);
       setScreen('form');
+    }
+  };
+
+  const handleMarkAsWorn = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      
+      const updatePromises = result.items.map(async (item) => {
+        // Find the original wardrobe item ID
+        const originalItem = wardrobe.find(w => w.name === item.name);
+        if (originalItem && originalItem.id) {
+          const docRef = doc(db, 'users', user.uid, 'wardrobe', originalItem.id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const currentCount = docSnap.data().wearCount || 0;
+            await updateDoc(docRef, { 
+              wearCount: currentCount + 1,
+              lastWorn: new Date().toISOString()
+            });
+          }
+        }
+      });
+      
+      await Promise.all(updatePromises);
+      navigate('/home');
+    } catch (err) {
+      console.error("Failed to update wear count:", err);
+      navigate('/home');
     }
   };
 
@@ -403,7 +434,7 @@ Generate a high-resolution professional fashion image of the EXACT person from R
 
                   <div className="result-actions-luxe fade-in-up" style={{ animationDelay: '0.3s', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <button onClick={() => setScreen('form')} className="pill-luxe">Try Another</button>
-                    <button onClick={() => navigate('/home')} className="btn-generate-luxe" style={{ marginTop: 0, padding: '12px' }}>Save & Exit</button>
+                    <button onClick={handleMarkAsWorn} className="btn-generate-luxe" style={{ marginTop: 0, padding: '12px' }}>Mark as Worn ✦</button>
                   </div>
                 </div>
               </div>
