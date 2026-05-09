@@ -364,48 +364,54 @@ export default function Wardrobe() {
         </div>
       </section>
 
-      {/* Category filter */}
-      <div className="filter-scroll-wrap fade-in-up" style={{ animationDelay: '0.2s' }}>
-        {categories.map(cat => (
-          <button
-            key={cat}
-            onClick={() => setFilterCategory(cat)}
-            className={`filter-pill ${filterCategory === cat ? 'active' : ''}`}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="error-banner fade-in">
-          {error}
+      <div className="wardrobe-main-flex">
+        {/* Wardrobe grid */}
+        <div className="wardrobe-grid-wrap fade-in-up" style={{ animationDelay: '0.3s' }}>
+          {filteredWardrobe.length === 0 ? (
+            <div className="empty-state-wardrobe">
+              <div className="empty-icon">👕</div>
+              <p className="empty-title">Your wardrobe is looking a bit quiet</p>
+              <p className="empty-text">Add your clothes manually or load our premium samples to get started.</p>
+            </div>
+          ) : (
+            <div className="wardrobe-grid-premium">
+              {filteredWardrobe.map(cloth => (
+                <ClothCard
+                  key={cloth.id}
+                  cloth={cloth}
+                  onTryOn={handleTryOn}
+                  onWorn={handleWorn}
+                  onDelete={handleDeleteCloth}
+                  onToggleFreeze={handleToggleFreeze}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      )}
 
-      {/* Wardrobe grid */}
-      <div className="wardrobe-grid-wrap fade-in-up" style={{ animationDelay: '0.3s' }}>
-        {filteredWardrobe.length === 0 ? (
-          <div className="empty-state-wardrobe">
-            <div className="empty-icon">👕</div>
-            <p className="empty-title">Your wardrobe is looking a bit quiet</p>
-            <p className="empty-text">Add your clothes manually or load our premium samples to get started.</p>
-          </div>
-        ) : (
-          <div className="wardrobe-grid-premium">
-            {filteredWardrobe.map(cloth => (
-              <ClothCard
-                key={cloth.id}
-                cloth={cloth}
-                onTryOn={handleTryOn}
-                onWorn={handleWorn}
-                onDelete={handleDeleteCloth}
-                onToggleFreeze={handleToggleFreeze}
-              />
+        {/* Category filter Sidebar (Vertical Right) */}
+        <aside className="wardrobe-sidebar-right fade-in-up" style={{ animationDelay: '0.2s' }}>
+          <h4 className="sidebar-title">Categories</h4>
+          <div className="filter-vertical-list">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setFilterCategory(cat)}
+                className={`filter-pill-vertical ${filterCategory === cat ? 'active' : ''}`}
+              >
+                {cat}
+                <span className="cat-count">
+                  {cat === 'All' ? wardrobe.length : wardrobe.filter(i => i.category === cat).length}
+                </span>
+              </button>
             ))}
           </div>
-        )}
+          
+          <div className="sidebar-decor">
+            <p>CURATED SELECTION</p>
+            <div className="decor-line"></div>
+          </div>
+        </aside>
       </div>
 
       {/* Modals */}
