@@ -25,6 +25,15 @@
   padding: 0 64px 40px; /* Removed top padding entirely */
 }
 
+@media (max-width: 768px) {
+  .main-layout-body {
+    padding-bottom: 80px;
+  }
+  .content-inner {
+    padding: 20px;
+  }
+}
+
 /* Global Premium Components */
 .premium-card {
   background: white;

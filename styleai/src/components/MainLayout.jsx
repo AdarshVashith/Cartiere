@@ -1,4 +1,5 @@
 import HeaderNav from './HeaderNav';
+import MobileNav from './MobileNav';
 import Sidebar from './Sidebar';
 import './MainLayout.css';
 
@@ -13,6 +14,7 @@ const MainLayout = ({ children }) => {
           </div>
         </main>
       </div>
+      <MobileNav />
     </div>
   );
 };

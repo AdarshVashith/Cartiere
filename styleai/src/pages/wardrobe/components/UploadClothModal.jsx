@@ -155,17 +155,16 @@ export default function UploadClothModal({ onClose, onSave }) {
       justifyContent: 'center',
       zIndex: 3000
     }}>
-      <div style={{
+      <div className="premium-modal-content" style={{
         background: 'white',
         borderRadius: '32px',
         padding: '32px',
-        width: '100%',
-        maxWidth: '560px',
-        margin: '0 20px',
+        width: 'min(560px, 95%)',
         maxHeight: '90vh',
         overflowY: 'auto',
         boxShadow: '0 40px 100px rgba(0,0,0,0.3)',
-        border: '1px solid rgba(0,0,0,0.05)'
+        border: '1px solid rgba(0,0,0,0.05)',
+        position: 'relative'
       }}>
         
         {/* Header */}

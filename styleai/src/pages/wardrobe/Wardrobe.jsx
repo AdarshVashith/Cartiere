@@ -302,15 +302,18 @@ export default function Wardrobe() {
   return (
     <MainLayout>
       <div className="wardrobe-content-wrap">
-        <header className="top-header fade-in-down" style={{ justifyContent: 'flex-end', marginBottom: '24px' }}>
-          <div className="header-actions">
+        <header className="wardrobe-header fade-in-down">
+          <div className="wardrobe-title-section">
+            <h1 className="premium-title">My Wardrobe</h1>
+            <p className="premium-subtitle">Manage and curate your digital closet</p>
+          </div>
+          <div className="wardrobe-header-actions">
             <button
               onClick={seedWardrobe}
               disabled={seedingLoading}
               className="premium-button-secondary"
-              style={{ marginRight: '12px' }}
             >
-              {seedingLoading ? 'Loading...' : '✦ Load Samples'}
+              {seedingLoading ? '...' : '✦ Samples'}
             </button>
             <button
               onClick={() => setShowUploadModal(true)}
