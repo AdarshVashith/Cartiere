@@ -7,26 +7,16 @@
   align-items: center;
   flex-shrink: 0;
   z-index: 1000;
-  padding: 40px 0;
-  box-shadow: 4px 0 24px rgba(120, 72, 84, 0.1);
+  padding: 100px 0 40px; /* Logo starts below 80px header */
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.1);
   position: fixed;
   left: 0;
   top: 0;
 }
 
 .brand-sm {
-  font-family: var(--font-editorial);
-  font-weight: 700;
-  font-size: 24px;
-  color: var(--bg-primary);
-  letter-spacing: 0.15em;
-  margin-bottom: 56px;
-  cursor: pointer;
-  opacity: 0.9;
-  transition: opacity 0.3s;
+  display: none; /* Hidden because STYLEMATE is in top bar */
 }
-
-.brand-sm:hover { opacity: 1; }
 
 .nav-icons {
   display: flex;

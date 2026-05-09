@@ -17,7 +17,7 @@
 
 .main-layout-content {
   flex: 1;
-  padding-top: 64px; /* Tighter fit to header */
+  padding-top: 80px; /* Aligned with solid header height */
 }
 
 .content-inner {
