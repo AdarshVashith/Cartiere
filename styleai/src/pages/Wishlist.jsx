@@ -17,6 +17,7 @@ export async function saveToWishlist(userId, item) {
 
 import MainLayout from '../components/MainLayout';
 import { runFrontendVTO } from '../utils/geminiVto';
+import './Wishlist.css';
 
 function Wishlist() {
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL && !window.location.hostname.includes('vercel.app') 
@@ -76,7 +77,7 @@ function Wishlist() {
     if (!activeItem?.imageUrl) return;
 
     if (!avatarUrl) {
-      setTryOnError('Please create your AI Avatar first to use Virtual Try-On.');
+      setTryOnError('Please create your AI Avatar first.');
       return;
     }
 
@@ -110,8 +111,8 @@ function Wishlist() {
   return (
     <MainLayout>
       <div className="wishlist-content-wrap">
-        <header className="top-header fade-in-down">
-          <div className="greeting-text">
+        <header className="wishlist-header fade-in-down">
+          <div className="wishlist-title-section">
             <h1 className="premium-title">Wishlist</h1>
             <p className="premium-subtitle">{wishlist.length} curated pieces awaiting your decision</p>
           </div>
@@ -158,7 +159,7 @@ function Wishlist() {
                       onClick={() => { setTryOnItem(item); handleTryOn(item) }}
                       className="action-btn btn-try"
                     >
-                      Try On
+                      Try On ✦
                     </button>
                   </div>
                 </div>
@@ -169,34 +170,55 @@ function Wishlist() {
 
         {tryOnItem && (
           <div className="premium-modal-overlay fade-in" onClick={() => setTryOnItem(null)}>
-            <div className="premium-modal-content" onClick={e => e.stopPropagation()}>
+            <div className="premium-modal-content split-view" onClick={e => e.stopPropagation()}>
               <header className="modal-header">
-                <h2 className="premium-title" style={{ fontSize: '24px' }}>Visual Try-On</h2>
+                <div className="modal-header-info">
+                  <h2 className="premium-title" style={{ fontSize: '20px' }}>Virtual Fitting Room</h2>
+                  <p className="premium-subtitle" style={{ margin: 0 }}>Visualizing {tryOnItem.title}</p>
+                </div>
                 <button className="close-modal" onClick={() => setTryOnItem(null)}>×</button>
               </header>
-              <div className="modal-body">
-                {tryOnLoading ? (
-                  <div className="tryon-loading-state">
-                    <div className="premium-loader"></div>
-                    <p className="premium-subtitle">Styling {tryOnItem.title}...</p>
+              
+              <div className="modal-split-body">
+                <div className="modal-side product-context">
+                  <div className="context-img">
+                    <img src={tryOnItem.imageUrl} alt={tryOnItem.title} />
                   </div>
-                ) : tryOnResult ? (
-                  <div className="tryon-result-stage">
-                    <img src={tryOnResult} alt="Result" />
-                    <button className="premium-button-primary" style={{ marginTop: '24px', width: '100%' }} onClick={() => {
-                       const a = document.createElement('a'); a.href = tryOnResult; a.download = 'wishlist-tryon.png'; a.click();
-                    }}>Save to Gallery</button>
+                  <div className="context-info">
+                    <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>{tryOnItem.title}</h3>
+                    <p style={{ fontSize: '13px', color: 'var(--mauve)', opacity: 0.8 }}>{tryOnItem.brand || 'Luxury Selection'}</p>
+                    <div style={{ marginTop: '16px' }}>
+                       <span className="pill-small">{tryOnItem.category || 'Accessory'}</span>
+                    </div>
                   </div>
-                ) : (
-                  <div className="tryon-error">
-                    {tryOnError || "Ready to visualize this piece."}
-                    {tryOnError.includes('Avatar') ? (
-                      <button className="premium-button-primary" style={{ marginTop: '12px' }} onClick={() => navigate('/generate-model')}>Create Avatar</button>
-                    ) : (
-                      <button className="premium-button-primary" style={{ marginTop: '12px' }} onClick={() => handleTryOn()}>Visualize</button>
-                    )}
-                  </div>
-                )}
+                </div>
+
+                <div className="modal-side tryon-stage">
+                  {tryOnLoading ? (
+                    <div className="tryon-loading-state">
+                      <div className="premium-loader"></div>
+                      <p className="premium-subtitle" style={{ marginTop: '16px' }}>Dressing your avatar...</p>
+                    </div>
+                  ) : tryOnResult ? (
+                    <div className="tryon-result-stage">
+                      <img src={tryOnResult} alt="Result" className="result-img" />
+                      <div className="result-actions">
+                        <button className="premium-button-primary" style={{ width: '100%' }} onClick={() => {
+                           const a = document.createElement('a'); a.href = tryOnResult; a.download = 'wishlist-outfit.png'; a.click();
+                        }}>Download Look</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="tryon-error">
+                      <p>{tryOnError || "Ready to generate your look."}</p>
+                      {tryOnError.includes('Avatar') ? (
+                        <button className="premium-button-primary" style={{ marginTop: '12px' }} onClick={() => navigate('/generate-model')}>Create Avatar</button>
+                      ) : (
+                        <button className="premium-button-primary" style={{ marginTop: '12px' }} onClick={() => handleTryOn()}>Retry Generation</button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

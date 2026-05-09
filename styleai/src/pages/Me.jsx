@@ -6,6 +6,7 @@ import { auth, db } from "../firebase/firebase";
 import { BottomTabNav } from "../components/TabNav";
 
 import MainLayout from "../components/MainLayout";
+import './Me.css';
 
 function Me() {
   const navigate = useNavigate();
