@@ -302,11 +302,7 @@ export default function Wardrobe() {
   return (
     <MainLayout>
       <div className="wardrobe-content-wrap">
-        <header className="top-header fade-in-down">
-          <div className="greeting-text">
-            <h1 className="premium-title">My Wardrobe</h1>
-            <p className="premium-subtitle">{wardrobe.length} items curated for your style</p>
-          </div>
+        <header className="top-header fade-in-down" style={{ justifyContent: 'flex-end', marginBottom: '24px' }}>
           <div className="header-actions">
             <button
               onClick={seedWardrobe}

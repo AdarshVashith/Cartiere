@@ -5,9 +5,7 @@ function Wardrobe() {
     <MainLayout>
       <div className="fade-in-up">
         <div className="flex flex-col gap-8">
-          <header className="mb-4">
-            <h1 className="premium-title">My Wardrobe</h1>
-            <p className="premium-subtitle">Manage and organize your digital collection</p>
+          <header className="mb-4 flex justify-end">
           </header>
 
           <section className="premium-card p-12 text-center flex flex-col items-center justify-center min-h-[400px]">
