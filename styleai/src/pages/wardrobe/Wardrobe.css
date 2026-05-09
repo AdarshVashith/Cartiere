@@ -48,125 +48,142 @@
 }
 
 .wardrobe-sidebar-right {
-  width: 240px;
+  width: 220px;
   position: sticky;
   top: 100px;
-  background: white;
-  padding: 24px;
-  border-radius: 24px;
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  padding: 32px 20px;
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.03);
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 32px;
 }
 
 .sidebar-title {
   font-family: var(--font-editorial);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--text-secondary);
+  padding-left: 12px;
+  opacity: 0.6;
 }
 
 .filter-vertical-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .filter-pill-vertical {
   width: 100%;
-  padding: 12px 16px;
-  border-radius: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
-  transition: all 0.3s ease;
+  transition: all 0.4s var(--transition-base);
   cursor: pointer;
+  position: relative;
 }
 
-.filter-pill-vertical:hover {
+.cat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
   background: var(--bg-secondary);
-  color: var(--text-primary);
+  color: var(--text-secondary);
+  transition: all 0.4s;
 }
 
-.filter-pill-vertical.active {
-  background: var(--mauve);
-  color: white;
-  box-shadow: 0 4px 12px rgba(120, 72, 84, 0.2);
+.cat-label {
+  flex: 1;
+  text-align: left;
 }
 
 .cat-count {
   font-size: 10px;
-  opacity: 0.6;
   font-weight: 700;
+  opacity: 0.4;
+  font-family: var(--font-mono);
 }
 
-.sidebar-decor {
-  margin-top: auto;
-  text-align: center;
-  opacity: 0.3;
+.filter-pill-vertical:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--text-primary);
 }
 
-.sidebar-decor p {
-  font-size: 9px;
-  letter-spacing: 0.2em;
-  font-weight: 800;
-  margin-bottom: 8px;
+.filter-pill-vertical.active {
+  background: white;
+  color: var(--text-primary);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.06);
 }
 
-.decor-line {
-  height: 1px;
-  background: var(--border);
-  width: 40px;
-  margin: 0 auto;
+.filter-pill-vertical.active .cat-icon {
+  background: var(--mauve);
+  color: white;
+}
+
+.filter-pill-vertical.active .cat-count {
+  opacity: 1;
+  color: var(--mauve);
 }
 
 @media (max-width: 1100px) {
   .wardrobe-main-flex {
     display: flex;
-    flex-direction: row; /* Keep it as a row even on mobile */
-    gap: 20px;
+    flex-direction: row;
+    gap: 16px;
   }
   .wardrobe-sidebar-right {
-    width: 140px; /* Slimmer sidebar for smaller screens */
-    position: sticky;
+    width: 80px; /* Ultra-slim icon sidebar for mobile */
+    padding: 24px 8px;
     top: 80px;
-    padding: 16px 12px;
+    border-radius: 20px;
   }
-  .sidebar-title {
-    font-size: 12px;
-    margin-bottom: 8px;
-  }
-  .filter-pill-vertical {
-    padding: 8px 10px;
-    font-size: 11px;
-    gap: 4px;
-  }
-  .cat-count {
-    font-size: 8px;
-  }
-  .sidebar-decor {
+  .sidebar-title, .cat-label {
     display: none;
   }
-}
-
-@media (max-width: 640px) {
-  .wardrobe-main-flex {
-    gap: 12px;
-  }
-  .wardrobe-sidebar-right {
-    width: 100px; /* Extra slim for very small mobile */
-    padding: 12px 8px;
-  }
   .filter-pill-vertical {
-    padding: 8px 6px;
-    font-size: 10px;
+    justify-content: center;
+    padding: 12px 0;
+  }
+  .cat-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .cat-count {
+    position: absolute;
+    top: 6px;
+    right: 4px;
+    background: var(--mauve);
+    color: white;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    opacity: 0;
+    transform: scale(0);
+    transition: all 0.3s;
+  }
+  .filter-pill-vertical.active .cat-count {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 

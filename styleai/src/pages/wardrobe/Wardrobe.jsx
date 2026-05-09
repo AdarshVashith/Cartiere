@@ -393,20 +393,33 @@ export default function Wardrobe() {
 
         {/* Category filter Sidebar (Vertical Right) */}
         <aside className="wardrobe-sidebar-right fade-in-up" style={{ animationDelay: '0.2s' }}>
-          <h4 className="sidebar-title">Categories</h4>
+          <h4 className="sidebar-title">Archive</h4>
           <div className="filter-vertical-list">
-            {categories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setFilterCategory(cat)}
-                className={`filter-pill-vertical ${filterCategory === cat ? 'active' : ''}`}
-              >
-                {cat}
-                <span className="cat-count">
-                  {cat === 'All' || cat === 'Wear Cycle' ? wardrobe.length : wardrobe.filter(i => i.category === cat).length}
-                </span>
-              </button>
-            ))}
+            {categories.map(cat => {
+              const icons = {
+                'All': <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+                'Wear Cycle': <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/><path d="m22 10-3-3 3-3"/></svg>,
+                'Top': <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>,
+                'Bottom': <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2v20l4-2 4 2V2"/><path d="M6 2h8"/><path d="M6 10h8"/></svg>,
+                'Dress': <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 2c0 .5.5 1 1 1h2c.5 0 1-.5 1-1"/><path d="M14 3v1l6 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8l6-4V3"/></svg>,
+                'Jacket': <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 3h16l2 11v7h-6v-5l-4-2-4 2v5H2v-7L4 3z"/><path d="M12 3v18"/></svg>,
+                'Shoes': <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18"/><path d="M3 12s0-6 9-6 9 6 9 6"/><path d="M12 6v12"/><path d="M3 12v6h18v-6"/></svg>,
+                'Accessory': <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+              }
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setFilterCategory(cat)}
+                  className={`filter-pill-vertical ${filterCategory === cat ? 'active' : ''}`}
+                >
+                  <span className="cat-icon">{icons[cat] || icons['All']}</span>
+                  <span className="cat-label">{cat}</span>
+                  <span className="cat-count">
+                    {cat === 'All' || cat === 'Wear Cycle' ? wardrobe.length : wardrobe.filter(i => i.category === cat).length}
+                  </span>
+                </button>
+              )
+            })}
           </div>
           
           <div className="sidebar-decor">
