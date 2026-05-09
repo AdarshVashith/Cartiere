@@ -25,9 +25,9 @@ async function runVTOPipeline(personUrl, topUrl, bottomUrl) {
 
   const genAI = new GoogleGenerativeAI(apiKey);
   
-  // Using 2.5 Flash Image for dedicated multimodal image output
+  // Using gemini-1.5-flash for stable multimodal image output
   const model = genAI.getGenerativeModel({ 
-    model: "gemini-2.5-flash-image",
+    model: "gemini-2.0-flash",
     safetySettings: [
       { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
       { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },

@@ -3,7 +3,7 @@
 // Falls back to DiceBear if Gemini fails.
 
 const GEMINI_API_KEY = 'AIzaSyB3XD2wzc51dbtoFyko1Gbhfuvry892QVc';
-const GEMINI_MODEL = 'gemini-2.5-flash-image';
+const GEMINI_MODEL = 'gemini-2.0-flash';
 
 /**
  * Generate a unique 2D cartoon avatar for a user using Gemini API.
