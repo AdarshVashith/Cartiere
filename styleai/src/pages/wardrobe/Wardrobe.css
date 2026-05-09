@@ -136,15 +136,88 @@
     width: 100%;
     position: relative;
     top: 0;
+    padding: 16px;
+    background: var(--bg-primary);
+    border: none;
+    border-radius: 0;
+    margin-bottom: 24px;
+  }
+  .sidebar-title {
+    font-size: 14px;
+    margin-bottom: 12px;
   }
   .filter-vertical-list {
     flex-direction: row;
     overflow-x: auto;
-    padding-bottom: 8px;
+    padding-bottom: 12px;
+    gap: 8px;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .filter-vertical-list::-webkit-scrollbar {
+    display: none;
   }
   .filter-pill-vertical {
     width: auto;
     white-space: nowrap;
+    padding: 10px 20px;
+    font-size: 13px;
+    background: white;
+    border: 1px solid var(--border);
+  }
+  .cat-count {
+    margin-left: 8px;
+  }
+  .sidebar-decor {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .wardrobe-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+    margin-bottom: 32px;
+  }
+  .wardrobe-header-actions {
+    width: 100%;
+  }
+  .wardrobe-header-actions button {
+    flex: 1;
+  }
+  .wear-cycle-section {
+    padding: 20px;
+    margin-bottom: 32px;
+  }
+  .wear-cycle-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .wear-cycle-stats .stat-card-mini:last-child {
+    grid-column: span 2;
+  }
+  .wardrobe-grid-premium {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .wear-cycle-stats {
+    grid-template-columns: 1fr;
+  }
+  .wear-cycle-stats .stat-card-mini:last-child {
+    grid-column: span 1;
+  }
+  .wardrobe-grid-premium {
+    grid-template-columns: 1fr;
+  }
+  .card-img-wrap {
+    height: 320px;
+  }
+  .current-wears {
+    font-size: 18px;
   }
 }
 
