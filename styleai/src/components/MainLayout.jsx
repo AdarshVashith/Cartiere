@@ -5,7 +5,6 @@ import './MainLayout.css';
 const MainLayout = ({ children }) => {
   return (
     <div className="main-layout-root">
-      <Sidebar />
       <div className="main-layout-body">
         <HeaderNav />
         <main className="main-layout-content">
