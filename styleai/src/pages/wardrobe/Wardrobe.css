@@ -382,9 +382,50 @@
 }
 
 
-.cloth-card-premium.is-frozen {
-  opacity: 0.8;
-  filter: grayscale(0.2);
+.wear-cycle-meter-wrap {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 8px 12px;
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid rgba(0,0,0,0.05);
+  transition: all 0.3s ease;
+}
+
+.cloth-card-premium:hover .wear-cycle-meter-wrap {
+  transform: translateY(-5px);
+}
+
+.meter-label {
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+
+.meter-segments {
+  display: flex;
+  gap: 3px;
+}
+
+.meter-segment {
+  width: 14px;
+  height: 4px;
+  background: var(--bg-secondary);
+  border-radius: 2px;
+  transition: all 0.4s ease;
+}
+
+.meter-segment.active {
+  background: var(--mauve);
+  box-shadow: 0 0 8px var(--mauve-soft);
 }
 
 .badge-frozen {

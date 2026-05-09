@@ -11,6 +11,19 @@ export default function ClothCard({ cloth, onTryOn, onWorn, onDelete, onToggleFr
         <div className="card-badge badge-cat">{cloth.category}</div>
         <div className="card-badge badge-worn">Worn {cloth.wearCount || 0}x</div>
         
+        {/* Wear Cycle Meter */}
+        <div className="wear-cycle-meter-wrap">
+          <div className="meter-label">Cycle Progress</div>
+          <div className="meter-segments">
+            {[...Array(5)].map((_, i) => (
+              <div 
+                key={i} 
+                className={`meter-segment ${i < (cloth.wearCount % 5 || (cloth.wearCount > 0 ? 5 : 0)) ? 'active' : ''}`}
+              />
+            ))}
+          </div>
+        </div>
+        
         {isFrozen && (
           <div className="card-badge badge-frozen">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="m2 12 10 10 10-10M12 2v20M20 9.176l-4-4M4 9.176l4-4M20 14.824l-4 4M4 14.824l4 4"/></svg>
