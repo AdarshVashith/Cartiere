@@ -422,10 +422,6 @@ export default function Wardrobe() {
             })}
           </div>
           
-          <div className="sidebar-decor">
-            <p>CURATED SELECTION</p>
-            <div className="decor-line"></div>
-          </div>
         </aside>
       </div>
 
