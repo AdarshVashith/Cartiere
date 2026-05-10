@@ -12,6 +12,7 @@ import OnboardingPage from "./pages/onboarding/OnboardingPage";
 import Wardrobe from "./pages/wardrobe/Wardrobe";
 import Wishlist from "./pages/Wishlist";
 import Landing from "./pages/Landing";
+import ImageArchitect from "./pages/ImageArchitect";
 
 function ProtectedRoute({ children }) {
   const [user, setUser] = useState(null);
@@ -120,6 +121,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Wishlist />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/architect"
+        element={
+          <ProtectedRoute>
+            <ImageArchitect />
           </ProtectedRoute>
         }
       />

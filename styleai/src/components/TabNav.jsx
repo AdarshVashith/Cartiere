@@ -37,6 +37,13 @@ const tabs = [
     </svg>
   },
   {
+    to: '/architect', label: 'Architect',
+    icon: (a) => <svg width="20" height="20" fill="none"
+      stroke={a ? '#111827' : '#9ca3af'} strokeWidth="1.8" viewBox="0 0 24 24">
+      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  },
+  {
     to: '/me', label: 'Me',
     icon: (a) => <svg width="20" height="20" fill="none"
       stroke={a ? '#111827' : '#9ca3af'} strokeWidth="1.8" viewBox="0 0 24 24">
