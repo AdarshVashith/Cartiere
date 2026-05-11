@@ -143,7 +143,7 @@ export default function GenerateOutfit() {
         setPreviewLoading(true);
         try {
           const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-          const MODEL = 'gemini-2.0-flash'; // Use the fast image generation model
+          const MODEL = 'gemini-2.5-flash-image'; // Use the fast image generation model
           
           // Helper to fetch images as base64
           const fetchB64 = async (url) => {
