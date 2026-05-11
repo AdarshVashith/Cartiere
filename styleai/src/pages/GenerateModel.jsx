@@ -124,7 +124,7 @@ export default function GenerateModel() {
     setAvatarUrl(null)
     setLoadingMessage('Preparing your face photo...')
 
-    const GEMINI_MODEL = 'gemini-2.0-flash';
+    const GEMINI_MODEL = 'gemini-2.0-flash-exp';
     const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
     try {
