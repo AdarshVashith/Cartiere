@@ -35,9 +35,9 @@ const configuredFrontendUrls = [
   process.env.VITE_FRONTEND_URL
 ].filter(Boolean)
 const GEMINI_IMAGE_MODEL =
-  process.env.GEMINI_IMAGE_MODEL || 'gemini-2.0-flash-exp'
+  process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image'
 const GEMINI_IMAGE_FALLBACK_MODEL =
-  process.env.GEMINI_IMAGE_FALLBACK_MODEL || 'gemini-1.5-flash'
+  process.env.GEMINI_IMAGE_FALLBACK_MODEL || 'gemini-2.5-flash-image'
 const GEMINI_IMAGE_CANDIDATE_MODELS = [
   GEMINI_IMAGE_MODEL,
   GEMINI_IMAGE_FALLBACK_MODEL
