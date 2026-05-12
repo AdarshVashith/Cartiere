@@ -138,81 +138,24 @@ export default function GenerateOutfit() {
 
       setScreen('result');
       
-      // Trigger Virtual Try-On — isolated so failures never reset the result screen
+      // Trigger Virtual Try-On — use backend for robust pipeline
       if (profile.avatarUrl) {
         setPreviewLoading(true);
         try {
-          const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-          const MODEL = 'gemini-2.5-flash-image'; // Use the fast image generation model
-          
-          // Helper to fetch images as base64
-          const fetchB64 = async (url) => {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`Failed to fetch image: ${url}`);
-            const buffer = await res.arrayBuffer();
-            const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
-            const mimeType = res.headers.get('content-type')?.split(';')[0] || 'image/jpeg';
-            return { inlineData: { mimeType, data: base64 } };
-          };
-
-          // Get first 3 garments to stay within multimodal limits
-          const garments = matched.filter(i => i.imageUrl).slice(0, 3);
-          const [avatarImg, ...clothImgs] = await Promise.all([
-            fetchB64(profile.avatarUrl),
-            ...garments.map(i => fetchB64(i.imageUrl))
-          ]);
-
-          const outfitDesc = matched.map(i => `${i.category}: ${i.name}`).join(', ');
-          const prompt = `Task: Photorealistic Virtual Try-On.
-Reference Image 1: The person (user's avatar).
-Clothing Items: ${outfitDesc}.
-
-Generate a high-resolution professional fashion image of the EXACT person from Reference Image 1 wearing the specified outfit. 
-- Preserve facial identity, body shape, and skin tone 100%.
-- Background: Clean studio white/gray.
-- Full body pose.`;
-
-          const vtoRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{
-                  parts: [
-                    avatarImg,
-                    ...clothImgs,
-                    { text: prompt }
-                  ]
-                }],
-                generationConfig: { responseModalities: ['IMAGE'] }
-              })
-            }
-          );
-
-          if (!vtoRes.ok) {
-            throw new Error(`Gemini VTO failed: ${vtoRes.status}`);
-          }
+          const vtoRes = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/generate-outfit-preview`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              avatarUrl: profile.avatarUrl,
+              items: matched
+            })
+          });
 
           const vtoData = await vtoRes.json();
-          let imageBase64 = null;
-          let imageMime = 'image/png';
-          
-          const candidates = vtoData?.candidates || [];
-          for (const cand of candidates) {
-            const parts = cand?.content?.parts || [];
-            for (const part of parts) {
-              if (part?.inlineData?.mimeType?.startsWith('image/')) {
-                imageBase64 = part.inlineData.data;
-                imageMime = part.inlineData.mimeType;
-                break;
-              }
-            }
-            if (imageBase64) break;
-          }
-
-          if (imageBase64) {
-            setOutfitPreviewUrl(`data:${imageMime};base64,${imageBase64}`);
+          if (vtoData.success && vtoData.imageUrl) {
+            setOutfitPreviewUrl(vtoData.imageUrl);
+          } else {
+            throw new Error(vtoData.error || 'VTO failed');
           }
         } catch (vtoErr) {
           console.warn('Virtual try-on unavailable:', vtoErr.message);
