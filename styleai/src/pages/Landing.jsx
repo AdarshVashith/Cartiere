@@ -4,6 +4,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase/firebase";
 import { warnFirestorePermission } from "../firebase/firestoreErrors";
+import heroModel from "../assets/hero_model.png";
 import "./Landing.css";
 
 const capabilityCards = [
@@ -235,7 +236,7 @@ const Landing = () => {
 
           <div className="hero-stage">
             <div className="hero-stage-shell custom-model-stage">
-              <img src="/hero_model.png" alt="StyleMate Model" className="hero-center-model" />
+              <img src={heroModel} alt="StyleMate Model" className="hero-center-model" />
               
               <div className="floating-stat stat-1">
                 <div className="stat-dot"></div>
