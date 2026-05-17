@@ -1,10 +1,9 @@
+import callBackend from './apiClient';
+
 export const runFrontendVTO = async (avatarUrl, clothImageUrl, category, clothName) => {
-  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
   const MODEL = 'gemini-2.5-flash-image'; 
 
   console.log('Starting Frontend VTO...', { category, clothName, model: MODEL });
-
-  if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is missing');
 
   // Helper with timeout
   const fetchWithTimeout = async (url, options = {}, timeout = 25000) => {
@@ -70,32 +69,13 @@ Generate a high-resolution professional fashion image of the person from Image 1
 - Natural blending.
 - Studio background.`;
 
-  const vtoRes = await fetchWithTimeout(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            avatarImg,
-            clothImg,
-            { text: prompt }
-          ]
-        }],
-        generationConfig: { responseModalities: ['IMAGE'] }
-      })
-    },
-    60000 // 60s timeout for generation
-  );
+  const resData = await callBackend('/api/try-on-gemini', {
+    avatarImg,
+    clothImg,
+    prompt
+  });
 
-  if (!vtoRes.ok) {
-    const errText = await vtoRes.text();
-    console.error('Gemini VTO Error:', errText);
-    throw new Error(`Gemini VTO failed: ${vtoRes.status}`);
-  }
-
-  const vtoData = await vtoRes.json();
+  const vtoData = resData.data;
   console.log('Gemini response received.');
   
   let imageBase64 = null;
@@ -123,12 +103,7 @@ Generate a high-resolution professional fashion image of the person from Image 1
  * Uses Gemini 2.5 Flash Image for high-fidelity reconstruction.
  */
 export const generateCleanGarmentImage = async (originalImageUrl, description) => {
-  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  const MODEL = 'gemini-2.5-flash-image';
-
   console.log('Generating isolated garment image via Gemini...', { description });
-
-  if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is missing');
 
   const prompt = `Generate a single isolated clothing product image for wardrobe cataloging.
 Garment Specifications: ${description}
@@ -145,29 +120,11 @@ Hard requirements:
 - Sharp edges around the garment
 - Do not invent extra accessories or matching pieces unless they are part of the same garment`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt }
-          ]
-        }],
-        generationConfig: { responseModalities: ['IMAGE'] }
-      })
-    }
-  );
+  const resData = await callBackend('/api/generate-garment-gemini', {
+    prompt
+  });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error('Gemini Generation Error:', errText);
-    throw new Error(`Gemini generation failed: ${res.status}`);
-  }
-
-  const data = await res.json();
+  const data = resData.data;
   let imageBase64 = null;
   let imageMime = 'image/png';
   

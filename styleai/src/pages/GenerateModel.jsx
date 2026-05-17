@@ -4,6 +4,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db, auth } from '../firebase/firebase'
 import { useNavigate } from 'react-router-dom'
 import { uploadToCloudinary } from '../utils/cloudinary'
+import callBackend from '../utils/apiClient'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL && !window.location.hostname.includes('vercel.app') 
   ? import.meta.env.VITE_BACKEND_URL 
@@ -124,13 +125,7 @@ export default function GenerateModel() {
     setAvatarUrl(null)
     setLoadingMessage('Preparing your face photo...')
 
-    const GEMINI_MODEL = 'gemini-2.5-flash-image';
-    const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-
     try {
-      if (!GEMINI_API_KEY || GEMINI_API_KEY.length < 10) {
-        throw new Error('Valid Gemini API key not found. Please check your environment variables.');
-      }
       // Step 1: Fetch user's face photo and convert to base64
       console.log('Fetching face photo:', profile.facePhotoUrl)
       const faceImage = await fetchImageAsBase64(profile.facePhotoUrl)
@@ -153,40 +148,17 @@ export default function GenerateModel() {
 
 Ensure the entire body is centered and the face is unmistakably the same individual.`
 
-      // Step 2: Send multimodal request (face photo + prompt) to Gemini
-      let response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                {
-                  inlineData: {
-                    mimeType: faceImage.mimeType,
-                    data: faceImage.base64
-                  }
-                },
-                { text: prompt }
-              ]
-            }],
-            generationConfig: {
-              responseModalities: ['IMAGE']
-            }
-          })
-        }
-      )
-
       setLoadingMessage('Gemini is crafting your personalized avatar...')
 
-      if (!response.ok) {
-        const errText = await response.text()
-        console.error('Gemini error:', errText)
-        throw new Error(`Gemini API returned status ${response.status}`)
-      }
+      const resData = await callBackend('/api/generate-avatar-gemini', {
+        faceImage: {
+          mimeType: faceImage.mimeType,
+          data: faceImage.base64
+        },
+        prompt: prompt
+      })
 
-      const data = await response.json()
+      const data = resData.data
 
       // Step 3: Extract generated image from response
       let imageDataUrl = null

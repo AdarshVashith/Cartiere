@@ -2,8 +2,7 @@
 // Generates a unique 2D avatar per user using Google Gemini image generation API.
 // Falls back to DiceBear if Gemini fails.
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const GEMINI_MODEL = 'gemini-2.5-flash-image';
+import callBackend from './apiClient';
 
 /**
  * Generate a unique 2D cartoon avatar for a user using Gemini API.
@@ -26,25 +25,11 @@ The avatar should be a friendly, stylish character bust/portrait with a clean so
 Square format, centered face, modern aesthetic. No text, no watermark.`;
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
-        })
-      }
-    );
+    const resData = await callBackend('/api/generate-garment-gemini', {
+      prompt
+    });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.warn('Gemini API error:', response.status, errText);
-      throw new Error(`Gemini API returned ${response.status}`);
-    }
-
-    const data = await response.json();
+    const data = resData.data;
 
     const candidates = data?.candidates || [];
     for (const candidate of candidates) {

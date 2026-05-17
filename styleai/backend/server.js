@@ -445,6 +445,152 @@ app.post('/api/generate-avatar', async (req, res) => {
   }
 })
 
+// ENDPOINT 1.5 — Secure Gemini Avatar Generation
+app.post('/api/generate-avatar-gemini', async (req, res) => {
+  try {
+    const { faceImage, prompt } = req.body
+
+    if (!faceImage || !faceImage.data || !faceImage.mimeType) {
+      throw new Error('No face image or invalid image structure provided')
+    }
+    if (!prompt) {
+      throw new Error('No prompt provided')
+    }
+
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+    if (!GEMINI_API_KEY) {
+      throw new Error('Gemini API key is not configured on the server')
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                inlineData: {
+                  mimeType: faceImage.mimeType,
+                  data: faceImage.data
+                }
+              },
+              { text: prompt }
+            ]
+          }],
+          generationConfig: {
+            responseModalities: ['IMAGE']
+          }
+        })
+      }
+    )
+
+    if (!response.ok) {
+      const errText = await response.text()
+      throw new Error(`Gemini API secure error: ${response.status} - ${errText}`)
+    }
+
+    const data = await response.json()
+    res.json({ success: true, data })
+  } catch (err) {
+    console.error('Gemini secure avatar error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ENDPOINT 1.6 — Secure Gemini Virtual Try-On
+app.post('/api/try-on-gemini', async (req, res) => {
+  try {
+    const { avatarImg, clothImg, prompt } = req.body
+
+    if (!avatarImg || !clothImg || !prompt) {
+      throw new Error('Missing avatarImg, clothImg, or prompt')
+    }
+
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+    if (!GEMINI_API_KEY) {
+      throw new Error('Gemini API key is not configured on the server')
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              avatarImg,
+              clothImg,
+              { text: prompt }
+            ]
+          }],
+          generationConfig: {
+            responseModalities: ['IMAGE']
+          }
+        })
+      }
+    )
+
+    if (!response.ok) {
+      const errText = await response.text()
+      throw new Error(`Gemini API secure VTO error: ${response.status} - ${errText}`)
+    }
+
+    const data = await response.json()
+    res.json({ success: true, data })
+  } catch (err) {
+    console.error('Gemini secure VTO error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ENDPOINT 1.7 — Secure Gemini Garment Generation
+app.post('/api/generate-garment-gemini', async (req, res) => {
+  try {
+    const { prompt } = req.body
+
+    if (!prompt) {
+      throw new Error('No prompt provided')
+    }
+
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+    if (!GEMINI_API_KEY) {
+      throw new Error('Gemini API key is not configured on the server')
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt }
+            ]
+          }],
+          generationConfig: {
+            responseModalities: ['IMAGE']
+          }
+        })
+      }
+    )
+
+    if (!response.ok) {
+      const errText = await response.text()
+      throw new Error(`Gemini API secure garment error: ${response.status} - ${errText}`)
+    }
+
+    const data = await response.json()
+    res.json({ success: true, data })
+  } catch (err) {
+    console.error('Gemini secure garment error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // ENDPOINT 2 — Virtual try-on with Hugging Face Inference
 app.post('/api/try-on', async (req, res) => {
   try {
