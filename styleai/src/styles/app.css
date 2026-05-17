@@ -1544,14 +1544,47 @@ button:focus-visible {
 }
 
 @media (max-width: 768px) {
+  .premium-modal-content.split-view {
+    height: 90vh;
+    max-height: none;
+    border-radius: 24px 24px 0 0;
+    position: fixed;
+    bottom: 0;
+    top: auto;
+  }
   .modal-split-body {
     flex-direction: column;
+    overflow-y: auto;
   }
   .modal-side {
     padding: 24px;
+    flex: none;
+    overflow-y: visible;
   }
   .product-context {
-    display: none; /* Hide original context on mobile to focus on result */
+    border-right: none;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+  }
+  .context-img {
+    aspect-ratio: 1/1;
+  }
+  .modal-header {
+    padding: 16px 20px;
+  }
+  .modal-header-info {
+    padding-right: 20px;
+  }
+  .premium-title {
+    font-size: 18px !important;
+  }
+  .premium-subtitle {
+    font-size: 12px !important;
+  }
+  .close-modal {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+    flex-shrink: 0;
   }
 }
 

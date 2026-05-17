@@ -56,6 +56,9 @@
   transition: all 0.3s;
   position: relative;
   padding: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .nav-link-item:hover {
@@ -64,6 +67,24 @@
 
 .nav-link-item.active {
   color: white;
+}
+
+.nav-link-item.disabled {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.nav-link-item.disabled:hover {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.nav-lock-indicator {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .nav-underline-accent {

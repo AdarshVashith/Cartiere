@@ -161,15 +161,29 @@ function AuthCard({ onAuthenticated }) {
 
         <div className="form-field">
           <label>Password</label>
-          <input 
-            name="password"
-            type="password" 
-            placeholder="Minimum 6 characters" 
-            value={formData.password}
-            onChange={handleChange}
-            minLength={6}
-            required
-          />
+          <div style={{ position: 'relative' }}>
+            <input 
+              name="password"
+              type={showPassword ? "text" : "password"} 
+              placeholder="Minimum 6 characters" 
+              value={formData.password}
+              onChange={handleChange}
+              minLength={6}
+              required
+              style={{ paddingRight: '50px' }}
+            />
+            <button 
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{ 
+                position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', color: 'var(--mauve)', fontWeight: '700', fontSize: '10px',
+                cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.1em'
+              }}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
         </div>
 
         {error && <p className="error-text-premium" style={{ color: '#e74c3c', fontSize: '12px', marginBottom: '16px' }}>{error}</p>}

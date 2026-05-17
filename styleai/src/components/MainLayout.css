@@ -49,7 +49,7 @@
 }
 
 .premium-button-primary {
-  background: var(--dark);
+  background: var(--mauve);
   color: white;
   border: none;
   border-radius: 18px;
@@ -62,7 +62,7 @@
 }
 
 .premium-button-primary:hover {
-  background: var(--mauve);
+  background: var(--dark);
   transform: translateY(-3px);
   box-shadow: 0 15px 30px rgba(120, 72, 84, 0.15);
 }

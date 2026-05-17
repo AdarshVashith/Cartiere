@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import AuthCard from "../../components/AuthCard";
 import { auth, db } from "../../firebase/firebase";
+import { isFirestorePermissionDenied, warnFirestorePermission } from "../../firebase/firestoreErrors";
 import "./AuthPage.css";
 
 function AuthPage() {
@@ -24,8 +25,8 @@ function AuthPage() {
       }
       navigate("/onboarding", { replace: true });
     } catch (error) {
-      console.error("Error checking user profile:", error);
-      navigate("/onboarding", { replace: true });
+      warnFirestorePermission("Error checking user profile:", error);
+      navigate(isFirestorePermissionDenied(error) ? "/home" : "/onboarding", { replace: true });
     }
   };
 

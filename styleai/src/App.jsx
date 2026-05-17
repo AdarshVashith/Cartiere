@@ -13,6 +13,7 @@ import Wardrobe from "./pages/wardrobe/Wardrobe";
 import Wishlist from "./pages/Wishlist";
 import Landing from "./pages/Landing";
 import ImageArchitect from "./pages/ImageArchitect";
+import { warnFirestorePermission } from "./firebase/firestoreErrors";
 
 function ProtectedRoute({ children }) {
   const [user, setUser] = useState(null);
@@ -39,7 +40,7 @@ function ProtectedRoute({ children }) {
             navigate("/home", { replace: true });
           }
         } catch (err) {
-          console.error("Auth check error:", err);
+          warnFirestorePermission("Auth check error:", err);
         }
         setUser(firebaseUser);
       } else {

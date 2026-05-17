@@ -1,10 +1,44 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase/firebase';
+import { mergeDiscoverState } from '../utils/discoverAccess';
 import './MobileNav.css';
 
 const MobileNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [discoverLocked, setDiscoverLocked] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setDiscoverLocked(false);
+        return;
+      }
+
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        setDiscoverLocked(!mergeDiscoverState(userDoc.data(), user.uid).isWardrobeComplete);
+      } catch (error) {
+        setDiscoverLocked(!mergeDiscoverState({}, user.uid).isWardrobeComplete);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const handleDiscoverSettingsUpdated = (event) => {
+      const activeUserId = auth.currentUser?.uid;
+      if (!activeUserId) return;
+      setDiscoverLocked(!mergeDiscoverState({}, activeUserId).isWardrobeComplete);
+    };
+
+    window.addEventListener('discover-settings-updated', handleDiscoverSettingsUpdated);
+    return () => window.removeEventListener('discover-settings-updated', handleDiscoverSettingsUpdated);
+  }, []);
 
   const navItems = [
     { 
@@ -20,6 +54,7 @@ const MobileNav = () => {
     { 
       label: 'Discover', 
       path: '/discover', 
+      disabled: discoverLocked,
       icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
     },
     { 
@@ -34,13 +69,23 @@ const MobileNav = () => {
     },
   ];
 
+  const handleNav = (item) => {
+    if (item.disabled) {
+      window.alert('Discover unlocks after you confirm in Wardrobe that this is your full wardrobe.');
+      navigate('/wardrobe');
+      return;
+    }
+
+    navigate(item.path);
+  };
+
   return (
     <nav className="mobile-nav">
       {navItems.map((item) => (
         <div 
           key={item.path}
-          className={`mobile-nav-item ${location.pathname === item.path ? 'active' : ''}`}
-          onClick={() => navigate(item.path)}
+          className={`mobile-nav-item ${location.pathname === item.path ? 'active' : ''} ${item.disabled ? 'locked' : ''}`}
+          onClick={() => handleNav(item)}
         >
           <span className="mobile-nav-icon">{item.icon}</span>
           <span className="mobile-nav-label">{item.label}</span>

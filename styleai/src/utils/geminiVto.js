@@ -126,17 +126,24 @@ export const generateCleanGarmentImage = async (originalImageUrl, description) =
   const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
   const MODEL = 'gemini-2.5-flash-image';
 
-  console.log('Generating Clean Garment Image via Gemini (Text-to-Image)...', { description });
+  console.log('Generating isolated garment image via Gemini...', { description });
 
   if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is missing');
 
-  const prompt = `Generate a high-fashion photography studio shot.
-Model: A professional high-fashion model wearing the specified garment.
+  const prompt = `Generate a single isolated clothing product image for wardrobe cataloging.
 Garment Specifications: ${description}
-Setting: Professional studio photography.
-Background: Pure, seamless white (#FFFFFF).
-Constraint 1: The garment's EXACT COLOR and SHADE must match the description perfectly.
-Constraint 2: The garment worn by the model MUST EXACTLY match the analyzed details (fabric texture, cut, fit, pattern, and hardware). Do not alter the garment's design.`;
+
+Hard requirements:
+- Show ONLY the garment itself
+- No human model
+- No mannequin body, hands, face, props, hanger, shelf, floor, or styling scene
+- Front-facing product presentation
+- Entire garment fully visible inside the frame
+- Preserve the EXACT color, fabric, cut, trim, stitching, hardware, and proportions
+- Clean e-commerce presentation
+- Transparent or perfectly removable plain background
+- Sharp edges around the garment
+- Do not invent extra accessories or matching pieces unless they are part of the same garment`;
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`,

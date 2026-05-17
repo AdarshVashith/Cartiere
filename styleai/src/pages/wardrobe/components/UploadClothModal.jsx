@@ -11,6 +11,7 @@ export default function UploadClothModal({ onClose, onSave }) {
   const [uploadedImageUrl, setUploadedImageUrl] = useState(null)
   const [searchResults, setSearchResults] = useState([])
   const [detectedDetails, setDetectedDetails] = useState(null)
+  const [editableDetails, setEditableDetails] = useState(null)
   const [selectedResult, setSelectedResult] = useState(null)
   const [removedBgUrl, setRemovedBgUrl] = useState(null)
   const [clothName, setClothName] = useState('')
@@ -22,6 +23,50 @@ export default function UploadClothModal({ onClose, onSave }) {
     'Top', 'Bottom', 'Dress', 'Jacket', 
     'Shoes', 'Accessory', 'Suit', 'Sportswear'
   ]
+
+  const activeDetails = editableDetails || detectedDetails
+
+  const analysisEntries = activeDetails?.analysis
+    ? [
+        ['Suggested Category', activeDetails.suggestedCategory],
+        ['Dominant Color', activeDetails.analysis.dominantColor],
+        ['Secondary Colors', activeDetails.analysis.secondaryColors?.join(', ')],
+        ['Pattern', activeDetails.analysis.pattern],
+        ['Material', activeDetails.analysis.material],
+        ['Texture', activeDetails.analysis.texture],
+        ['Fit', activeDetails.analysis.fit],
+        ['Silhouette', activeDetails.analysis.silhouette],
+        ['Sleeve Length', activeDetails.analysis.sleeveLength],
+        ['Neckline / Collar', activeDetails.analysis.necklineOrCollar],
+        ['Hem Details', activeDetails.analysis.hemDetails],
+        ['Closure', activeDetails.analysis.closure],
+        ['Hardware', activeDetails.analysis.hardware],
+        ['Pockets', activeDetails.analysis.pockets],
+        ['Stitching', activeDetails.analysis.stitching],
+        ['Embellishments', activeDetails.analysis.embellishments],
+        ['Season', activeDetails.analysis.season],
+        ['Occasions', activeDetails.analysis.occasion?.join(', ')],
+        ['Gender Presentation', activeDetails.analysis.genderPresentation],
+        ['Confidence Notes', activeDetails.analysis.confidenceNotes]
+      ].filter(([, value]) => value && String(value).trim())
+    : []
+
+  const updateEditableField = (key, value) => {
+    setEditableDetails(prev => ({
+      ...(prev || {}),
+      [key]: value
+    }))
+  }
+
+  const updateEditableAnalysisField = (key, value) => {
+    setEditableDetails(prev => ({
+      ...(prev || {}),
+      analysis: {
+        ...(prev?.analysis || {}),
+        [key]: value
+      }
+    }))
+  }
 
   // Step 1 — Upload photo to Cloudinary first
   const handlePhotoUpload = async (e) => {
@@ -64,6 +109,7 @@ export default function UploadClothModal({ onClose, onSave }) {
       
       setSearchResults(data.results)
       setDetectedDetails(data.details)
+      setEditableDetails(data.details)
       setStep('select')
       setLoading(false)
       
@@ -82,8 +128,7 @@ export default function UploadClothModal({ onClose, onSave }) {
     setStep('generating-clean-shot')
     
     try {
-      // Use the full technical description (material/details) for the highest fidelity generation
-      const garmentDesc = detectedDetails?.material || detectedDetails?.garment || 'fashion garment';
+      const garmentDesc = activeDetails?.reconstructionPrompt || activeDetails?.summary || activeDetails?.garment || 'fashion garment';
       
       let finalImgUrl = null;
 
@@ -92,25 +137,26 @@ export default function UploadClothModal({ onClose, onSave }) {
         const outfitPrompt = `Complete stylish outfit including ${garmentDesc}, on a professional fashion model, cinematic lighting, 8k resolution, fashion catalog style`;
         finalImgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(outfitPrompt)}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 9999)}`;
       } else {
-        // High-fidelity EXACT garment generation via Gemini
-        console.log('Regenerating garment with Gemini Image Generation...');
-        finalImgUrl = await generateCleanGarmentImage(uploadedImageUrl, garmentDesc);
+        console.log('Regenerating cloth-only garment via Gemini Image Generation...');
+        const generatedImage = await generateCleanGarmentImage(uploadedImageUrl, garmentDesc);
+        const generatedImageUrl = await uploadToCloudinary(generatedImage, 'styleai/wardrobe-generated')
+        const removeBgResponse = await fetch(`${BACKEND_URL}/api/remove-bg`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageUrl: generatedImageUrl })
+        })
+        const removeBgData = await removeBgResponse.json()
+        finalImgUrl = removeBgData?.success ? removeBgData.dataUrl : generatedImageUrl
       }
       
       const cloudinaryUrl = await uploadToCloudinary(finalImgUrl, 'styleai/wardrobe')
       setRemovedBgUrl(cloudinaryUrl)
 
-      if (detectedDetails) {
-        if (detectedDetails.brand && detectedDetails.garment) {
-          setClothName(`${detectedDetails.brand} ${detectedDetails.garment}`)
-        } else if (detectedDetails.garment) {
-          setClothName(detectedDetails.garment)
+      if (activeDetails) {
+        setClothName(activeDetails.garment || 'Detected Garment')
+        if (categories.includes(activeDetails.suggestedCategory)) {
+          setClothCategory(activeDetails.suggestedCategory)
         }
-        
-        const matchedCat = categories.find(c => 
-          detectedDetails.garment?.toLowerCase().includes(c.toLowerCase())
-        )
-        if (matchedCat) setClothCategory(matchedCat)
       }
 
       setStep('details')
@@ -137,6 +183,9 @@ export default function UploadClothModal({ onClose, onSave }) {
       category: clothCategory,
       imageUrl: removedBgUrl,
       originalImageUrl: uploadedImageUrl,
+      detectedDetails: activeDetails,
+      searchQuery: activeDetails?.query || '',
+      color: activeDetails?.color || activeDetails?.analysis?.dominantColor || '',
       wearCount: 0,
       wearHistory: [],
       addedAt: new Date().toISOString(),
@@ -231,18 +280,189 @@ export default function UploadClothModal({ onClose, onSave }) {
         {/* Step 3 — Select result */}
         {step === 'select' && (
           <div>
-            {detectedDetails && (
+            {activeDetails && (
               <div style={{ marginBottom: '24px', padding: '16px', background: '#F8F1F3', borderRadius: '20px', border: '1px solid rgba(120, 72, 84, 0.1)' }}>
                 <p style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', color: 'var(--color-mauve)', marginBottom: '12px', letterSpacing: '0.1em' }}>
-                  AI Analysis Results
+                  Step 1: Detailed Cloth Analysis
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {detectedDetails.brand && <span className="pill-small">🏷️ {detectedDetails.brand}</span>}
-                  {detectedDetails.garment && <span className="pill-small">👗 {detectedDetails.garment}</span>}
-                  {detectedDetails.material && <span className="pill-small">🧵 {detectedDetails.material}</span>}
+                  {activeDetails.brand && <span className="pill-small">🏷️ {activeDetails.brand}</span>}
+                  {activeDetails.garment && <span className="pill-small">👗 {activeDetails.garment}</span>}
+                  {activeDetails.suggestedCategory && <span className="pill-small">🗂️ {activeDetails.suggestedCategory}</span>}
+                  {(activeDetails.color || activeDetails.analysis?.dominantColor) && <span className="pill-small">🎨 {activeDetails.color || activeDetails.analysis?.dominantColor}</span>}
                 </div>
+                {activeDetails.summary && (
+                  <p style={{ margin: '14px 0 0', fontSize: '13px', lineHeight: 1.6, color: '#4B5563' }}>
+                    {activeDetails.summary}
+                  </p>
+                )}
               </div>
             )}
+
+            <div className="flex flex-col gap-4" style={{ marginBottom: '24px' }}>
+              <div className="form-field">
+                <label>Detected Garment Name</label>
+                <input
+                  type="text"
+                  value={activeDetails?.garment || ''}
+                  onChange={e => updateEditableField('garment', e.target.value)}
+                  placeholder="e.g. Navy blue knit polo shirt"
+                />
+              </div>
+
+              <div className="form-field">
+                <label>Analysis Summary</label>
+                <textarea
+                  value={activeDetails?.summary || ''}
+                  onChange={e => {
+                    updateEditableField('summary', e.target.value)
+                    updateEditableField('reconstructionPrompt', e.target.value)
+                  }}
+                  placeholder="Edit the overall cloth analysis before generation"
+                  rows={5}
+                />
+              </div>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '12px'
+              }}>
+                <div className="form-field">
+                  <label>Suggested Category</label>
+                  <select
+                    value={activeDetails?.suggestedCategory || 'Top'}
+                    onChange={e => updateEditableField('suggestedCategory', e.target.value)}
+                  >
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-field">
+                  <label>Dominant Color</label>
+                  <input
+                    type="text"
+                    value={activeDetails?.analysis?.dominantColor || ''}
+                    onChange={e => updateEditableAnalysisField('dominantColor', e.target.value)}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Pattern</label>
+                  <input
+                    type="text"
+                    value={activeDetails?.analysis?.pattern || ''}
+                    onChange={e => updateEditableAnalysisField('pattern', e.target.value)}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Material</label>
+                  <input
+                    type="text"
+                    value={activeDetails?.analysis?.material || ''}
+                    onChange={e => updateEditableAnalysisField('material', e.target.value)}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Texture</label>
+                  <input
+                    type="text"
+                    value={activeDetails?.analysis?.texture || ''}
+                    onChange={e => updateEditableAnalysisField('texture', e.target.value)}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Fit / Silhouette</label>
+                  <input
+                    type="text"
+                    value={[activeDetails?.analysis?.fit, activeDetails?.analysis?.silhouette].filter(Boolean).join(', ')}
+                    onChange={e => {
+                      updateEditableAnalysisField('fit', e.target.value)
+                      updateEditableAnalysisField('silhouette', e.target.value)
+                    }}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Collar / Neckline</label>
+                  <input
+                    type="text"
+                    value={activeDetails?.analysis?.necklineOrCollar || ''}
+                    onChange={e => updateEditableAnalysisField('necklineOrCollar', e.target.value)}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Sleeve Length</label>
+                  <input
+                    type="text"
+                    value={activeDetails?.analysis?.sleeveLength || ''}
+                    onChange={e => updateEditableAnalysisField('sleeveLength', e.target.value)}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Closure / Hardware</label>
+                  <input
+                    type="text"
+                    value={[activeDetails?.analysis?.closure, activeDetails?.analysis?.hardware].filter(Boolean).join(', ')}
+                    onChange={e => {
+                      updateEditableAnalysisField('closure', e.target.value)
+                      updateEditableAnalysisField('hardware', e.target.value)
+                    }}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Hem / Pockets / Stitching</label>
+                  <input
+                    type="text"
+                    value={[
+                      activeDetails?.analysis?.hemDetails,
+                      activeDetails?.analysis?.pockets,
+                      activeDetails?.analysis?.stitching
+                    ].filter(Boolean).join(', ')}
+                    onChange={e => {
+                      updateEditableAnalysisField('hemDetails', e.target.value)
+                      updateEditableAnalysisField('pockets', e.target.value)
+                      updateEditableAnalysisField('stitching', e.target.value)
+                    }}
+                  />
+                </div>
+              </div>
+
+              {analysisEntries.length > 0 && (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '10px'
+                }}>
+                  {analysisEntries.map(([label, value]) => (
+                    <div
+                      key={label}
+                      style={{
+                        background: '#FFFFFF',
+                        border: '1px solid #EEE7EA',
+                        borderRadius: '16px',
+                        padding: '12px 14px'
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9C7B84', fontWeight: 800 }}>
+                        {label}
+                      </p>
+                      <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#1F2937', lineHeight: 1.45 }}>
+                        {value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
               <button
@@ -257,7 +477,7 @@ export default function UploadClothModal({ onClose, onSave }) {
                 className="premium-button-primary"
                 style={{ flex: 1.5, padding: '12px' }}
               >
-                ✦ Generate Outfit
+                ✦ Generate Cloth Image
               </button>
             </div>
           </div>
@@ -268,9 +488,9 @@ export default function UploadClothModal({ onClose, onSave }) {
           <div className="flex flex-col items-center gap-4 py-8">
             <div className="premium-loader"></div>
             <p className="premium-subtitle" style={{ fontSize: '15px' }}>
-              Generating professional studio shot...
+              Step 2: Generating cloth-only image...
             </p>
-            <p style={{ fontSize: '12px', color: '#9CA3AF' }}>Creating model-less clean image</p>
+            <p style={{ fontSize: '12px', color: '#9CA3AF' }}>Gemini is rebuilding the garment, then isolating it from the background</p>
           </div>
         )}
 
@@ -307,6 +527,9 @@ export default function UploadClothModal({ onClose, onSave }) {
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
+              <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#6B7280' }}>
+                Step 3: Category is auto-detected, but you can change it before saving.
+              </p>
             </div>
             
             <button

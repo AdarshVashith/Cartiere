@@ -3,29 +3,100 @@ import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase/firebase";
+import { warnFirestorePermission } from "../firebase/firestoreErrors";
 import "./Landing.css";
+
+const capabilityCards = [
+  {
+    icon: "compass",
+    eyebrow: "Wardrobe Intelligence",
+    title: "See what is missing before you buy anything.",
+    body: "StyleMate maps your existing wardrobe, identifies gap categories, and pushes only the pieces that improve outfit range.",
+  },
+  {
+    icon: "spark",
+    eyebrow: "Virtual Styling",
+    title: "Try recommendations on your AI model before you commit.",
+    body: "Preview new clothes on your generated profile and compare looks with more confidence before shopping.",
+  },
+  {
+    icon: "grid",
+    eyebrow: "Aesthetic Engineering",
+    title: "Move toward a sharper target look with technical guidance.",
+    body: "Use Image Architect to break down proportions, palette, grooming direction, and structural upgrades for a chosen aesthetic.",
+  },
+];
+
+const showcaseSignals = [
+  { title: "Gap-aware shopping", body: "Only items your wardrobe actually needs." },
+  { title: "Visual try-on", body: "Preview recommendations on your AI profile." },
+  { title: "Target aesthetic", body: "Refine the exact look you want to grow into." },
+];
+
+const aestheticStrip = [
+  "Quiet Luxury",
+  "Industrial Techwear",
+  "Scandi-Minimalism",
+  "Old Money",
+  "Streetwear",
+  "Modern Workwear",
+];
+
+const wardrobeSignals = [
+  "Digital wardrobe archive",
+  "Discover gap analysis",
+  "Virtual try-on previews",
+];
+
+function CapabilityIcon({ type }) {
+  if (type === "spark") {
+    return (
+      <svg viewBox="0 0 64 64" className="capability-svg">
+        <path d="M32 6 38 24 56 32 38 40 32 58 26 40 8 32 26 24Z" />
+        <circle cx="49" cy="15" r="4" />
+      </svg>
+    );
+  }
+
+  if (type === "grid") {
+    return (
+      <svg viewBox="0 0 64 64" className="capability-svg">
+        <rect x="10" y="10" width="18" height="18" rx="5" />
+        <rect x="36" y="10" width="18" height="18" rx="5" />
+        <rect x="10" y="36" width="18" height="18" rx="5" />
+        <rect x="36" y="36" width="18" height="18" rx="5" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 64 64" className="capability-svg">
+      <circle cx="32" cy="32" r="20" />
+      <path d="M32 20 38 32l-6 12-6-12Z" />
+      <circle cx="32" cy="32" r="4" />
+    </svg>
+  );
+}
 
 const Landing = () => {
   const navigate = useNavigate();
   const canvasRef = useRef(null);
   const [scrolled, setScrolled] = useState(false);
-  const [carouselIdx, setCarouselIdx] = useState(0);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
-  const trackRef = useRef(null);
-  const lineRef = useRef(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      if (u) {
+    const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
+      setUser(nextUser);
+      if (nextUser) {
         try {
-          const userDoc = await getDoc(doc(db, "users", u.uid));
+          const userDoc = await getDoc(doc(db, "users", nextUser.uid));
           if (userDoc.exists()) {
             setProfile(userDoc.data());
           }
         } catch (err) {
-          console.error("Error fetching profile on landing:", err);
+          setProfile(null);
+          warnFirestorePermission("Error fetching profile on landing:", err);
         }
       } else {
         setProfile(null);
@@ -34,143 +105,64 @@ const Landing = () => {
     return () => unsubscribe();
   }, []);
 
-  const outfitData = [
-    { name: "Smart Casual", combo: "Teal Shirt + Trousers" },
-    { name: "Evening Look", combo: "Mauve Blazer + White Shirt" },
-    { name: "Weekend Vibes", combo: "Grey Hoodie + Jeans" },
-    { name: "Office Ready", combo: "Structured Jacket + Shirt" },
-    { name: "Summer Edit", combo: "Linen Shirt + Shorts" },
-    { name: "Minimalist", combo: "White Tee + Slim Pants" },
-  ];
-
-  // Canvas Logic
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    let shapes = [];
-    const shapeTypes = ["tshirt", "dress", "blazer", "hanger", "sneaker", "tote"];
+    let nodes = [];
 
-    const createShape = (y = Math.random() * canvas.height) => ({
-      x: Math.random() * canvas.width,
-      y: y,
-      type: shapeTypes[Math.floor(Math.random() * shapeTypes.length)],
-      size: Math.random() * 80 + 60,
-      speed: Math.random() * 0.4 + 0.2,
-      rotation: Math.random() * Math.PI * 2,
-      rotSpeed: Math.random() * 0.003 + 0.002,
-      opacity: Math.random() * 0.06 + 0.04,
+    const createNode = () => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      radius: Math.random() * 2.6 + 1.2,
+      driftX: (Math.random() - 0.5) * 0.18,
+      driftY: Math.random() * 0.3 + 0.08,
+      alpha: Math.random() * 0.24 + 0.04,
     });
-
-    const drawShape = (s, scrollY) => {
-      ctx.save();
-      const drawY = (s.y - scrollY * 0.1) % canvas.height;
-      ctx.translate(s.x, drawY < 0 ? drawY + canvas.height : drawY);
-      ctx.rotate(s.rotation);
-      ctx.strokeStyle = `rgba(120, 72, 84, ${s.opacity})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-
-      const sz = s.size;
-      if (s.type === "tshirt") {
-        ctx.moveTo(-sz / 2, -sz / 4); ctx.lineTo(-sz / 4, -sz / 2); ctx.lineTo(sz / 4, -sz / 2); ctx.lineTo(sz / 2, -sz / 4);
-        ctx.lineTo(sz / 2, sz / 2); ctx.lineTo(-sz / 2, sz / 2); ctx.closePath();
-      } else if (s.type === "dress") {
-        ctx.moveTo(-sz / 4, -sz / 2); ctx.lineTo(sz / 4, -sz / 2); ctx.lineTo(sz / 2, sz / 2); ctx.lineTo(-sz / 2, sz / 2); ctx.closePath();
-      } else if (s.type === "blazer") {
-        ctx.strokeRect(-sz / 3, -sz / 2, sz * 0.66, sz); ctx.moveTo(-sz / 3, -sz / 4); ctx.lineTo(0, 0); ctx.lineTo(sz / 3, -sz / 4);
-      } else if (s.type === "hanger") {
-        ctx.moveTo(0, -sz / 2); ctx.lineTo(sz / 2, 0); ctx.lineTo(-sz / 2, 0); ctx.closePath(); ctx.arc(0, -sz / 2 - 5, 5, 0, Math.PI);
-      } else if (s.type === "sneaker") {
-        ctx.moveTo(-sz / 2, sz / 4); ctx.lineTo(sz / 2, sz / 4); ctx.lineTo(sz / 2, -sz / 4); ctx.lineTo(0, -sz / 4); ctx.lineTo(-sz / 2, sz / 8); ctx.closePath();
-      } else if (s.type === "tote") {
-        ctx.strokeRect(-sz / 3, -sz / 4, sz * 0.66, sz * 0.75); ctx.arc(0, -sz / 4, sz / 4, Math.PI, 0);
-      }
-      ctx.stroke();
-      ctx.restore();
-    };
 
     const init = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      shapes = Array.from({ length: 20 }, () => createShape());
+      nodes = Array.from({ length: 32 }, createNode);
     };
 
-    let animationId;
-    const animate = () => {
+    let animationFrame;
+    const render = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      shapes.forEach((s) => {
-        s.y += s.speed;
-        s.rotation += s.rotSpeed;
-        drawShape(s, window.scrollY);
+      nodes.forEach((node) => {
+        node.x += node.driftX;
+        node.y += node.driftY;
+        if (node.y > canvas.height + 20) node.y = -20;
+        if (node.x < -20) node.x = canvas.width + 20;
+        if (node.x > canvas.width + 20) node.x = -20;
+
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(120, 72, 84, ${node.alpha})`;
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.fill();
       });
-      animationId = requestAnimationFrame(animate);
+
+      animationFrame = requestAnimationFrame(render);
     };
 
     init();
-    animate();
+    render();
     window.addEventListener("resize", init);
 
     return () => {
-      cancelAnimationFrame(animationId);
+      cancelAnimationFrame(animationFrame);
       window.removeEventListener("resize", init);
     };
   }, []);
 
-  // Scroll and Observer Logic
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener("scroll", handleScroll);
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            if (entry.target.classList.contains("counter")) {
-              const target = +entry.target.dataset.target;
-              let count = 0;
-              const update = () => {
-                count += Math.ceil(target / 100);
-                if (count < target) {
-                  entry.target.innerText = count;
-                  requestAnimationFrame(update);
-                } else {
-                  entry.target.innerText = target;
-                }
-              };
-              update();
-            }
-            if (entry.target.id === "howItWorks") {
-              if (lineRef.current) lineRef.current.style.strokeDashoffset = "0";
-            }
-            entry.target.classList.add("active");
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    document.querySelectorAll(".counter, .testimonial-card, .how-it-works").forEach((el) => observer.observe(el));
-
-    return () => window.removeEventListener("scroll", handleScroll);
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Carousel Auto-scroll
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCarouselIdx((prev) => (prev + 1) % outfitData.length);
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [outfitData.length]);
-
-  useEffect(() => {
-    if (trackRef.current) {
-      const offset = carouselIdx * (200 + 32);
-      trackRef.current.style.transform = `translateX(-${offset}px)`;
-    }
-  }, [carouselIdx]);
-
   const handleNav = (path) => navigate(path);
+  const memberName = profile?.name || user?.email?.split("@")[0] || "StyleMate";
 
   return (
     <div className="landing-page">
@@ -178,124 +170,196 @@ const Landing = () => {
 
       <nav className={`landing-nav ${scrolled ? "scrolled" : ""}`}>
         <div className="container nav-content">
-          <div className="logo-wrap" onClick={() => navigate("/")} style={{ cursor: "pointer" }}>
-            <div className="logo">STYLEMATE</div>
-          </div>
-          <div className="nav-btns">
+          <button className="logo-wrap landing-reset-btn" onClick={() => navigate("/")}>
+            <span className="logo">STYLEMATE</span>
+          </button>
+
+          <div className="nav-actions-cluster">
+            <div className="nav-inline-note">AI wardrobe system for sharper everyday dressing</div>
             {user ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "10px", opacity: 0.5, fontWeight: 700, letterSpacing: '0.1em' }}>MEMBER</div>
-                  <div style={{ fontSize: "15px", fontWeight: 600, color: 'var(--mauve)' }}>{profile?.name || user.email.split('@')[0]}</div>
-                </div>
-                <div 
-                  onClick={() => handleNav("/home")}
-                  className="sidebar-avatar-thumb"
-                  style={{ width: '44px', height: '44px', border: '2px solid var(--mauve)', cursor: 'pointer' }}
-                >
+              <button className="member-chip landing-reset-btn" onClick={() => handleNav("/home")}>
+                <span className="member-chip-text">
+                  <small>Member</small>
+                  <strong>{memberName}</strong>
+                </span>
+                <span className="member-avatar-shell">
                   {profile?.avatarUrl ? (
                     <img src={profile.avatarUrl} alt="Avatar" />
                   ) : (
-                    <div style={{ background: 'var(--mauve)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                      {user.email[0].toUpperCase()}
-                    </div>
+                    <span>{memberName[0]?.toUpperCase() || "S"}</span>
                   )}
-                </div>
-              </div>
+                </span>
+              </button>
             ) : (
-              <>
-                <button className="btn-ghost" onClick={() => handleNav("/login")}>Login</button>
-                <button className="btn-filled" onClick={() => handleNav("/login")}>Start Styling</button>
-              </>
+              <div className="nav-btns">
+                <button className="btn-ghost landing-reset-btn" onClick={() => handleNav("/login")}>Login</button>
+                <button className="btn-filled landing-reset-btn" onClick={() => handleNav("/login")}>Start Styling</button>
+              </div>
             )}
           </div>
         </div>
       </nav>
 
-      <section className="hero container">
-        <div className="hero-left">
-          <span className="hero-label">AI-POWERED FASHION ENGINE</span>
-          <h1 className="hero-title">
-            {profile?.name ? (
-              `Welcome back, ${profile.name.split(' ')[0]}.`
-            ) : (
-              <>
-                Your Personal <br />
-                <span style={{ color: 'var(--mauve)' }}>AI Stylist</span>
-              </>
-            )}
-          </h1>
-          <p className="hero-subtext">
-            StyleMate analyzes your wardrobe to generate weather-aware, context-driven outfit combinations tailored specifically to your aesthetic.
-          </p>
-          <div className="hero-btns">
-            {user ? (
-              <button className="btn-primary" onClick={() => handleNav("/home")}>Dashboard →</button>
-            ) : (
-              <button className="btn-primary" onClick={() => handleNav("/login")}>Join StyleMate</button>
-            )}
-            <button className="btn-secondary">Explore Features</button>
+      <main className="landing-main">
+        <section className="hero container">
+          <div className="hero-copy">
+            <div className="hero-kicker-wrap">
+              <span className="hero-label">Precision wardrobe intelligence</span>
+              <span className="hero-status-pill">Live AI Styling System</span>
+            </div>
+
+            <h1 className="hero-title">
+              Build a wardrobe that
+              <span className="hero-accent"> thinks ahead.</span>
+            </h1>
+
+            <p className="hero-subtext">
+              StyleMate turns your wardrobe into a high-context styling system: what you own, what you are missing, what fits your aesthetic, and what deserves a place in rotation next.
+            </p>
+
+            <div className="hero-btns">
+              <button className="btn-primary landing-reset-btn" onClick={() => handleNav(user ? "/home" : "/login")}>
+                {user ? "Open Dashboard" : "Start Styling"}
+              </button>
+              <button className="btn-secondary landing-reset-btn" onClick={() => handleNav("/discover")}>
+                Explore Discover
+              </button>
+            </div>
+
+            <div className="hero-signal-row">
+              {wardrobeSignals.map((signal) => (
+                <span key={signal} className="hero-signal-pill">{signal}</span>
+              ))}
+            </div>
           </div>
-        </div>
-        
-        <div className="hero-right fade-in">
-          <div className="ai-badge">✦ PREMIUM AI MODEL</div>
-          <div className="wardrobe-rack">
-            {profile?.avatarUrl ? (
-              <div className="model-stage-landing">
-                <img src={profile.avatarUrl} alt="User Model" style={{ width: '100%', height: 'auto', maxHeight: '400px', objectFit: 'contain' }} />
+
+          <div className="hero-stage">
+            <div className="hero-stage-shell">
+              <div className="hero-stage-topline">
+                <span className="hero-stage-kicker">Style command view</span>
+                <span className="hero-stage-chip">Premium AI model</span>
               </div>
-            ) : (
-              <div className="empty-rack-landing">
-                <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="var(--border)" strokeWidth="0.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M9 20V6"/><path d="M15 20V6"/><path d="M2 10h20"/></svg>
-                <p>Digital wardrobe ready for your collection.</p>
+
+              <div className="hero-stage-grid">
+                <div className="hero-stage-portrait">
+                  {profile?.avatarUrl ? (
+                    <img src={profile.avatarUrl} alt="User model" className="hero-avatar-figure" />
+                  ) : (
+                    <div className="hero-avatar-placeholder">
+                      <div className="placeholder-bust" />
+                      <p>Generate your avatar to unlock visual styling previews.</p>
+                    </div>
+                  )}
+                  <div className="portrait-orbit orbit-one" />
+                  <div className="portrait-orbit orbit-two" />
+                  <div className="portrait-orbit orbit-three" />
+                </div>
+
+                <div className="hero-stage-panel">
+                  <div className="hero-panel-card primary">
+                    <p className="panel-eyebrow">Discover Signal</p>
+                    <h3>What should enter the wardrobe next?</h3>
+                    <p>Only gap-filling recommendations with styling logic, reasons, and price comparison.</p>
+                  </div>
+
+                  <div className="showcase-signal-stack">
+                    {showcaseSignals.map((signal, index) => (
+                      <div key={signal.title} className={`showcase-signal-card signal-${index + 1}`}>
+                        <span className="panel-stat">{signal.title}</span>
+                        <span className="panel-copy">{signal.body}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="features container">
-        <h2 className="section-title">Elevate Your Daily Style</h2>
-        <div className="features-grid">
-          <div className="feature-card">
-            <div className="feature-icon-wrap">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/></svg>
             </div>
-            <h3>Style Intelligence</h3>
-            <p>Our AI maps your collection to identify style gaps and discover hidden outfit combinations you never knew existed.</p>
           </div>
-          <div className="feature-card">
-            <div className="feature-icon-wrap">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 19.07-1.41-1.41"/><path d="M12 20v2"/><path d="m6.34 17.66-1.41 1.41"/><path d="M2 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="M20 12a8 8 0 1 0-16 0"/><path d="M12 9v3l1.5 1.5"/></svg>
-            </div>
-            <h3>Contextual Sync</h3>
-            <p>Receive daily outfit recommendations synced with your local weather and calendar, ensuring you're always ready.</p>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon-wrap">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
-            </div>
-            <h3>Brand Affinity</h3>
-            <p>StyleMate learns your preference for cuts, colors, and textures, creating a personalized fashion profile that evolves with you.</p>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="final-cta container" style={{ padding: '120px 0', textAlign: 'center' }}>
-        <h2 className="premium-title" style={{ fontSize: '64px', marginBottom: '24px' }}>Ready to redefine your style?</h2>
-        <p className="premium-subtitle" style={{ fontSize: '18px', maxWidth: '600px', margin: '0 auto 48px' }}>
-          Join thousands of fashion-forward individuals using AI to master their wardrobes.
-        </p>
-        <button className="btn-primary" onClick={() => handleNav(user ? "/home" : "/login")}>
-          {user ? "Enter Dashboard" : "Start Styling for Free"}
-        </button>
-      </section>
+        <section className="aesthetic-marquee">
+          <div className="aesthetic-track">
+            {[...aestheticStrip, ...aestheticStrip].map((item, index) => (
+              <span key={`${item}-${index}`} className="aesthetic-track-item">{item}</span>
+            ))}
+          </div>
+        </section>
 
-      <footer>
-        <div className="container">
-          <div className="logo" style={{ fontSize: '20px', marginBottom: '12px' }}>STYLEMATE</div>
-          <div style={{ fontSize: "12px", opacity: 0.5, letterSpacing: '0.05em' }}>© 2026 STYLEMATE LUXURY AI. ALL RIGHTS RESERVED.</div>
+        <section className="capabilities container">
+          <div className="section-heading">
+            <p className="section-kicker">System Capabilities</p>
+            <h2 className="section-title">A more professional way to manage personal style.</h2>
+            <p className="section-description">
+              Less random inspiration. More decision support across wardrobe planning, recommendation quality, and personal aesthetic direction.
+            </p>
+          </div>
+
+          <div className="capabilities-grid">
+            {capabilityCards.map((card) => (
+              <article key={card.title} className="capability-card">
+                <div className="capability-icon-shell">
+                  <CapabilityIcon type={card.icon} />
+                </div>
+                <p className="capability-eyebrow">{card.eyebrow}</p>
+                <h3>{card.title}</h3>
+                <p>{card.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="editorial-band container">
+          <div className="editorial-band-card">
+            <div className="editorial-band-copy">
+              <p className="section-kicker">For disciplined styling</p>
+              <h2 className="section-title small">From wardrobe chaos to a clear style operating system.</h2>
+              <p className="section-description">
+                Upload your wardrobe, mark what is complete, unlock Discover, and move into a more accurate recommendation loop shaped by your lifestyle and target aesthetic.
+              </p>
+            </div>
+
+            <div className="editorial-band-stack">
+              <div className="editorial-mini-card">
+                <span>01</span>
+                <p>Archive your real wardrobe</p>
+              </div>
+              <div className="editorial-mini-card">
+                <span>02</span>
+                <p>Unlock Discover with intent</p>
+              </div>
+              <div className="editorial-mini-card">
+                <span>03</span>
+                <p>Use Image Architect to refine the end goal</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="final-cta container">
+          <div className="final-cta-card">
+            <p className="section-kicker">Ready when you are</p>
+            <h2 className="section-title">Turn the wardrobe into an advantage.</h2>
+            <p className="section-description">
+              Build a sharper closet, buy more intentionally, and style from a system that actually knows what you own.
+            </p>
+            <div className="hero-btns cta-actions">
+              <button className="btn-primary landing-reset-btn" onClick={() => handleNav(user ? "/home" : "/login")}>
+                {user ? "Go to Dashboard" : "Create Your Profile"}
+              </button>
+              <button className="btn-secondary landing-reset-btn" onClick={() => handleNav("/architect")}>
+                Open Image Architect
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="landing-footer">
+        <div className="container landing-footer-inner">
+          <div>
+            <div className="logo footer-logo">STYLEMATE</div>
+            <p className="footer-copy">AI fashion direction for wardrobe clarity, stronger taste, and smarter decisions.</p>
+          </div>
+          <div className="footer-meta">© 2026 StyleMate. Built for modern wardrobe planning.</div>
         </div>
       </footer>
     </div>

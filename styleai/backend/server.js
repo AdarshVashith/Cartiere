@@ -43,6 +43,17 @@ const GEMINI_IMAGE_CANDIDATE_MODELS = [
   GEMINI_IMAGE_FALLBACK_MODEL
 ].filter(Boolean)
 let geminiModelListCache = null
+const WARDROBE_CATEGORY_OPTIONS = [
+  'Top',
+  'Bottom',
+  'Dress',
+  'Jacket',
+  'Shoes',
+  'Accessory',
+  'Suit',
+  'Sportswear'
+]
+const UNKNOWN_DETAIL = 'Not clearly visible'
 
 app.use((req, res, next) => {
   const requestOrigin = req.headers.origin
@@ -229,6 +240,128 @@ async function createGroqJsonResponse({ systemPrompt, userPrompt, maxTokens = 10
   }
 }
 
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+  return ''
+}
+
+function normalizeText(value, fallback = UNKNOWN_DETAIL) {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback
+}
+
+function normalizeList(value, fallback = []) {
+  if (!Array.isArray(value)) return fallback
+  return value.map(entry => String(entry || '').trim()).filter(Boolean)
+}
+
+function inferCategoryFromGarment(garmentName = '') {
+  const garment = garmentName.toLowerCase()
+  if (/(shoe|sneaker|loafer|heel|boot|sandal)/.test(garment)) return 'Shoes'
+  if (/(dress|gown)/.test(garment)) return 'Dress'
+  if (/(jacket|coat|blazer|hoodie|outerwear)/.test(garment)) return 'Jacket'
+  if (/(jean|pant|trouser|short|skirt|bottom|cargo|legging)/.test(garment)) return 'Bottom'
+  if (/(suit)/.test(garment)) return 'Suit'
+  if (/(sport|jersey|track|athletic|gym)/.test(garment)) return 'Sportswear'
+  if (/(bag|belt|cap|hat|scarf|watch|jewelry|accessory)/.test(garment)) return 'Accessory'
+  return 'Top'
+}
+
+function extractGeminiTextPayload(geminiData) {
+  const candidates = Array.isArray(geminiData?.candidates) ? geminiData.candidates : []
+  for (const candidate of candidates) {
+    const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []
+    for (const part of parts) {
+      if (typeof part?.text === 'string' && part.text.trim()) {
+        return part.text.trim()
+      }
+    }
+  }
+  return '{}'
+}
+
+function parseJsonFromText(rawText) {
+  if (typeof rawText !== 'string' || !rawText.trim()) {
+    throw new Error('Model returned empty JSON text')
+  }
+
+  try {
+    return JSON.parse(rawText)
+  } catch (error) {
+    const start = rawText.indexOf('{')
+    const end = rawText.lastIndexOf('}')
+    if (start === -1 || end === -1 || end <= start) {
+      throw error
+    }
+    return JSON.parse(rawText.slice(start, end + 1))
+  }
+}
+
+function buildIndiaStoreSearches(query) {
+  const encodedQuery = encodeURIComponent(query || 'fashion item')
+  return [
+    {
+      store: 'Amazon India',
+      title: 'Search on Amazon',
+      link: `https://www.amazon.in/s?k=${encodedQuery}`,
+      price: '',
+      delivery: ''
+    },
+    {
+      store: 'Flipkart',
+      title: 'Explore Flipkart',
+      link: `https://www.flipkart.com/search?q=${encodedQuery}`,
+      price: '',
+      delivery: ''
+    },
+    {
+      store: 'Myntra',
+      title: 'Explore Myntra',
+      link: `https://www.myntra.com/${encodedQuery}`,
+      price: '',
+      delivery: ''
+    },
+    {
+      store: 'AJIO',
+      title: 'Explore AJIO',
+      link: `https://www.ajio.com/search/?text=${encodedQuery}`,
+      price: '',
+      delivery: ''
+    }
+  ]
+}
+
+function mergePreferredStores(primaryStores, fallbackStores) {
+  const seen = new Set()
+  const merged = []
+
+  for (const store of [...primaryStores, ...fallbackStores]) {
+    const key = String(store.store || '').toLowerCase()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    merged.push(store)
+  }
+
+  return merged
+}
+
+function buildFallbackProductImage(itemName, category) {
+  const prompt = `premium ecommerce product photo of ${itemName || 'fashion item'}, category ${category || 'fashion'}, on a clean light background, studio lighting, realistic clothing catalog image`
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=600&height=800&nologo=true&seed=42`
+}
+
+function extractPriceAmount(priceValue) {
+  if (typeof priceValue === 'number' && Number.isFinite(priceValue)) return priceValue
+  if (typeof priceValue !== 'string') return null
+  const cleaned = priceValue.replace(/[^0-9.]/g, '')
+  if (!cleaned) return null
+  const parsed = Number(cleaned)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 // ENDPOINT 1 — Generate avatar with Replicate Flux
 app.post('/api/generate-avatar', async (req, res) => {
   try {
@@ -390,79 +523,203 @@ app.post('/api/generate-outfit-preview', async (req, res) => {
   }
 })
 
-// ENDPOINT 3 — Google Lens visual search
+// ENDPOINT 3 — Detailed cloth analysis for wardrobe intake
 app.post('/api/visual-search', async (req, res) => {
   try {
     const { imageUrl } = req.body
     console.log('=== Visual Search ===')
     console.log('Image URL:', imageUrl)
-    console.log('SerpApi Key:', process.env.SERPAPI_KEY ? 'SET' : 'MISSING')
+    console.log('Gemini Key:', process.env.GEMINI_API_KEY ? 'SET' : 'MISSING')
 
     if (!imageUrl) throw new Error('No image URL provided')
-    if (!process.env.SERPAPI_KEY) {
-      throw new Error('SERPAPI_KEY missing from .env')
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY missing from .env')
     }
 
-    const serpUrl = new URL('https://serpapi.com/search.json')
-    serpUrl.searchParams.set('engine', 'google_lens')
-    serpUrl.searchParams.set('url', imageUrl)
-    serpUrl.searchParams.set('api_key', process.env.SERPAPI_KEY)
+    const imgRes = await fetch(imageUrl)
+    if (!imgRes.ok) throw new Error('Could not fetch clothing image')
+    const buffer = await imgRes.buffer()
+    const mimeType = imgRes.headers.get('content-type')?.split(';')[0] || 'image/jpeg'
+    const base64 = buffer.toString('base64')
 
-    console.log('Calling SerpApi...')
-    const response = await fetch(serpUrl.toString())
-    const data = await response.json()
+    const prompt = `You are a senior fashion archivist and product analyst. Inspect this single clothing item image in exhaustive detail.
 
-    console.log('SerpApi response status:', response.status)
-    console.log('SerpApi error:', data.error || 'none')
+Your job is to extract every visual clue the image reliably supports. Be concrete and avoid vague words like "nice" or "stylish".
+If a detail cannot be confidently seen, write "Not clearly visible" instead of leaving it blank.
+Allowed categories: ${WARDROBE_CATEGORY_OPTIONS.join(', ')}
 
-    if (data.error) throw new Error(data.error)
+Inspect and infer when visible:
+- garment name should be specific and useful for a wardrobe UI
+- garment type
+- best wardrobe category from the allowed categories
+- exact dominant color and secondary color
+- pattern or print
+- fabric/material and surface texture
+- fit/silhouette
+- sleeve length
+- neckline or collar style
+- hem/cuff/placket details
+- closure/hardware
+- pockets/panels/stitching
+- embellishments/logos/graphics
+- likely season
+- likely use occasions
+- gender presentation if obvious from the garment cut only
 
-    const results = (data.visual_matches || [])
-      .slice(0, 6)
-      .map(item => ({
-        title: item.title || 'Similar item',
-        imageUrl: item.thumbnail || item.image,
-        link: item.link || '',
-        source: item.source || ''
-      }))
-      .filter(item => item.imageUrl)
+Return ONLY valid JSON in exactly this shape:
+{
+  "query": "specific google shopping search query for this item",
+  "garment": "specific garment name including color",
+  "suggestedCategory": "one of ${WARDROBE_CATEGORY_OPTIONS.join(', ')}",
+  "details": "single dense paragraph describing the garment precisely for image reconstruction",
+  "analysis": {
+    "dominantColor": "string",
+    "secondaryColors": ["string"],
+    "pattern": "string",
+    "material": "string",
+    "texture": "string",
+    "fit": "string",
+    "silhouette": "string",
+    "sleeveLength": "string",
+    "necklineOrCollar": "string",
+    "hemDetails": "string",
+    "closure": "string",
+    "hardware": "string",
+    "pockets": "string",
+    "stitching": "string",
+    "embellishments": "string",
+    "season": "string",
+    "occasion": ["string"],
+    "genderPresentation": "string",
+    "confidenceNotes": "string"
+  }
+}`
 
-    console.log('Results found:', results.length)
-    if (results.length === 0) {
-      return res.json({
-        success: true,
-        fallback: true,
-        results: [
-          {
-            title: 'Original upload',
-            imageUrl,
-            link: '',
-            source: 'fallback'
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inlineData: { mimeType, data: base64 } },
+              { text: prompt }
+            ]
+          }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      }
+    )
+
+    const geminiData = await response.json()
+    if (!response.ok) {
+      throw new Error(geminiData?.error?.message || `Gemini API error: ${response.status}`)
+    }
+
+    let rawText = extractGeminiTextPayload(geminiData)
+    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim()
+
+    let analysis = {}
+    try {
+      analysis = JSON.parse(rawText)
+    } catch (e1) {
+      try {
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          analysis = JSON.parse(jsonMatch[0])
+        } else {
+          throw e1
+        }
+      } catch (e2) {
+        console.error('Visual analysis parse failed:', e2.message)
+        analysis = {
+          query: 'clothing item',
+          garment: 'Clothing Item',
+          suggestedCategory: 'Top',
+          details: 'Style details were partially extracted from the uploaded garment image.',
+          analysis: {
+            dominantColor: UNKNOWN_DETAIL,
+            secondaryColors: [],
+            pattern: UNKNOWN_DETAIL,
+            material: UNKNOWN_DETAIL,
+            texture: UNKNOWN_DETAIL,
+            fit: UNKNOWN_DETAIL,
+            silhouette: UNKNOWN_DETAIL,
+            sleeveLength: UNKNOWN_DETAIL,
+            necklineOrCollar: UNKNOWN_DETAIL,
+            hemDetails: UNKNOWN_DETAIL,
+            closure: UNKNOWN_DETAIL,
+            hardware: UNKNOWN_DETAIL,
+            pockets: UNKNOWN_DETAIL,
+            stitching: UNKNOWN_DETAIL,
+            embellishments: UNKNOWN_DETAIL,
+            season: UNKNOWN_DETAIL,
+            occasion: [],
+            genderPresentation: UNKNOWN_DETAIL,
+            confidenceNotes: 'Model response could not be parsed cleanly.'
           }
-        ]
-      })
+        }
+      }
     }
 
-    res.json({ success: true, results })
+    const garmentName = firstNonEmpty(analysis.garment, analysis.query, 'Detected garment')
+    const normalizedCategory = WARDROBE_CATEGORY_OPTIONS.includes(analysis.suggestedCategory)
+      ? analysis.suggestedCategory
+      : inferCategoryFromGarment(garmentName)
+
+    const normalizedAnalysis = {
+      dominantColor: normalizeText(analysis?.analysis?.dominantColor),
+      secondaryColors: normalizeList(analysis?.analysis?.secondaryColors),
+      pattern: normalizeText(analysis?.analysis?.pattern),
+      material: normalizeText(analysis?.analysis?.material),
+      texture: normalizeText(analysis?.analysis?.texture),
+      fit: normalizeText(analysis?.analysis?.fit),
+      silhouette: normalizeText(analysis?.analysis?.silhouette),
+      sleeveLength: normalizeText(analysis?.analysis?.sleeveLength),
+      necklineOrCollar: normalizeText(analysis?.analysis?.necklineOrCollar),
+      hemDetails: normalizeText(analysis?.analysis?.hemDetails),
+      closure: normalizeText(analysis?.analysis?.closure),
+      hardware: normalizeText(analysis?.analysis?.hardware),
+      pockets: normalizeText(analysis?.analysis?.pockets),
+      stitching: normalizeText(analysis?.analysis?.stitching),
+      embellishments: normalizeText(analysis?.analysis?.embellishments),
+      season: normalizeText(analysis?.analysis?.season),
+      occasion: normalizeList(analysis?.analysis?.occasion),
+      genderPresentation: normalizeText(analysis?.analysis?.genderPresentation),
+      confidenceNotes: normalizeText(analysis?.analysis?.confidenceNotes, 'Generated from visual analysis')
+    }
+
+    const normalizedSummary = firstNonEmpty(
+      analysis.details,
+      `${garmentName}. Dominant color: ${normalizedAnalysis.dominantColor}. Material: ${normalizedAnalysis.material}. Pattern: ${normalizedAnalysis.pattern}. Texture: ${normalizedAnalysis.texture}. Fit: ${normalizedAnalysis.fit}. Collar/neckline: ${normalizedAnalysis.necklineOrCollar}. Sleeve length: ${normalizedAnalysis.sleeveLength}. Hem details: ${normalizedAnalysis.hemDetails}. Closure and hardware: ${normalizedAnalysis.closure}, ${normalizedAnalysis.hardware}.`
+    )
+
+    return res.json({
+      success: true,
+      details: {
+        garment: garmentName,
+        suggestedCategory: normalizedCategory,
+        reconstructionPrompt: normalizedSummary,
+        query: String(analysis.query || garmentName),
+        summary: normalizedSummary,
+        color: normalizedAnalysis.dominantColor,
+        brand: 'Detected Style',
+        analysis: normalizedAnalysis
+      },
+      results: [
+        {
+          title: garmentName,
+          imageUrl,
+          link: `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(analysis.query || garmentName || 'clothing item')}`,
+          source: 'AI Vision'
+        }
+      ]
+    })
 
   } catch (err) {
     console.error('Visual search error:', err.message)
-    const { imageUrl } = req.body || {}
-    return res.json({
-      success: true,
-      fallback: true,
-      error: err.message,
-      results: imageUrl
-        ? [
-            {
-              title: 'Original upload',
-              imageUrl,
-              link: '',
-              source: 'fallback'
-            }
-          ]
-        : []
-    })
+    return res.status(500).json({ success: false, error: err.message })
   }
 })
 
@@ -630,7 +887,7 @@ app.post('/api/generate-outfit', async (req, res) => {
 // ENDPOINT 6 — Discover Wardrobe Gaps
 app.post('/api/discover-items', requireAuth, async (req, res) => {
   try {
-    const { wardrobe, profile } = req.body
+    const { wardrobe, profile, maxBudget } = req.body
 
     console.log('=== Discover Items ===')
     console.log('Authenticated user:', req.user?.localId || 'unknown')
@@ -643,7 +900,8 @@ app.post('/api/discover-items', requireAuth, async (req, res) => {
       throw new Error('Profile is required')
     }
 
-    const systemPrompt = `You are a fashion buyer AI. Analyze a user's wardrobe and recommend specific items they need.
+    const systemPrompt = `You are a senior fashion buyer and personal stylist AI.
+Recommend items the user does NOT already own, and explain the style logic clearly.
 Respond with ONLY valid JSON. No markdown, no preamble.`
 
     const wardrobeList = wardrobe.length > 0
@@ -658,14 +916,43 @@ Respond with ONLY valid JSON. No markdown, no preamble.`
     - Age: ${profile?.age || 'Unknown'}
     - Body Type: ${profile?.bodyType || 'Unknown'}
     - Skin Tone: ${profile?.skinTone || 'Unknown'}
+    - Occupation: ${profile?.job || 'Unknown'}
+    - City: ${profile?.city || 'Unknown'}
+    - Style interests: ${Array.isArray(profile?.styleInterests) && profile.styleInterests.length ? profile.styleInterests.join(', ') : 'Not provided'}
+    - Clothing needs: ${Array.isArray(profile?.lifestyleNeeds) && profile.lifestyleNeeds.length ? profile.lifestyleNeeds.join(', ') : 'Not provided'}
+    - Target aesthetic: ${profile?.targetAesthetic || 'Not provided'}
+    - Architect summary: ${profile?.architectSummary || 'Not provided'}
 
     Current wardrobe inventory:
     ${wardrobeList}
 
-    What 6 items should this person buy next? For each item provide:
-    name (specific product name), category, reason (why they need it, mention wardrobe gaps),
-    matchScore (60-98, how well it fills a gap), estimatedPrice (USD integer),
-    searchQuery (a Google Shopping search string for this exact item)
+    Budget:
+    - Maximum budget per product: ${maxBudget ? `INR ${maxBudget}` : 'No fixed budget provided'}
+
+    What 6 items should this person buy next? Recommendations must:
+    - assume the wardrobe submitted is the user's complete wardrobe
+    - fill gaps in the current wardrobe
+    - match the user's likely style personality, field of interest, and profile
+    - improve outfit versatility, polish, layering, contrast, or occasion coverage
+    - cover the kinds of clothing this person would realistically require for their lifestyle and goals
+    - avoid recommending items they effectively already own
+    - be relevant for a shopper in India
+    - stay within the stated budget when possible
+
+    For each item provide:
+    - name: specific product name
+    - category: one of Shirt, Pant, Jacket, Shoes, Accessory
+    - reason: short 1-2 sentence explanation of why this item is being shown
+    - matchScore: 60-98
+    - estimatedPrice: INR integer
+    - searchQuery: an India-friendly shopping search string for this exact item
+    - wardrobeGap: what is missing from the wardrobe
+    - styleBenefit: how this improves the user's overall look
+    - personalityFit: how it matches the user's style personality
+    - outfitLogic: practical styling logic for how it works with existing wardrobe pieces
+    - occasions: array of 2-4 occasions where it will help
+    - pairWith: array of 2-4 wardrobe item types or pieces it pairs with
+    - confidence: integer 60-98
 
     Expected response JSON:
     {
@@ -675,8 +962,15 @@ Respond with ONLY valid JSON. No markdown, no preamble.`
           "category": "Shirt",
           "reason": "No formal shirts in wardrobe — needed for Work occasions",
           "matchScore": 92,
-          "estimatedPrice": 45,
-          "searchQuery": "white oxford button down shirt men slim fit"
+          "estimatedPrice": 3499,
+          "searchQuery": "white oxford button down shirt men slim fit india",
+          "wardrobeGap": "The wardrobe lacks a crisp formal shirt.",
+          "styleBenefit": "It sharpens the overall wardrobe and gives cleaner structure near the face.",
+          "personalityFit": "This works for someone building a polished, versatile, quietly refined style.",
+          "outfitLogic": "It can be paired with dark trousers, layered under a blazer, or worn open with chinos.",
+          "occasions": ["Work", "Dinner", "Smart Casual"],
+          "pairWith": ["Black chinos", "Navy blazer", "Leather loafers"],
+          "confidence": 93
         }
       ]
     }
@@ -697,7 +991,8 @@ Respond with ONLY valid JSON. No markdown, no preamble.`
       return res.status(500).json({ success: false, error: 'AI generated invalid response format' })
     }
 
-    const items = Array.isArray(parsedResponse.items) ? parsedResponse.items.slice(0, 6) : []
+    const numericBudget = Number(maxBudget) > 0 ? Number(maxBudget) : null
+    const items = Array.isArray(parsedResponse.items) ? parsedResponse.items.slice(0, 8) : []
     const enrichedItems = await Promise.all(
       items.map(async (item) => {
         const enrichedItem = {
@@ -705,8 +1000,17 @@ Respond with ONLY valid JSON. No markdown, no preamble.`
           category: item.category || 'Accessory',
           reason: item.reason || 'Recommended to strengthen a wardrobe gap.',
           matchScore: Math.max(60, Math.min(98, Number(item.matchScore) || 60)),
-          estimatedPrice: Math.max(1, Math.round(Number(item.estimatedPrice) || 25)),
-          searchQuery: item.searchQuery || item.name || 'fashion item'
+          estimatedPrice: Math.max(299, Math.round(Number(item.estimatedPrice) || 2499)),
+          searchQuery: item.searchQuery || item.name || 'fashion item',
+          wardrobeGap: item.wardrobeGap || 'This fills a missing category or styling gap in the current wardrobe.',
+          styleBenefit: item.styleBenefit || 'This recommendation adds polish and improves outfit flexibility.',
+          personalityFit: item.personalityFit || 'It aligns with the user profile and current style direction.',
+          outfitLogic: item.outfitLogic || 'It works across multiple outfits and adds stronger styling range.',
+          occasions: Array.isArray(item.occasions) ? item.occasions.slice(0, 4) : [],
+          pairWith: Array.isArray(item.pairWith) ? item.pairWith.slice(0, 4) : [],
+          confidence: Math.max(60, Math.min(98, Number(item.confidence) || Number(item.matchScore) || 60)),
+          stores: [],
+          fallbackImageUrl: buildFallbackProductImage(item.name || 'fashion item', item.category || 'Accessory')
         }
 
         if (!process.env.SERPAPI_KEY) {
@@ -716,29 +1020,286 @@ Respond with ONLY valid JSON. No markdown, no preamble.`
         try {
           const controller = new AbortController()
           const timeout = setTimeout(() => controller.abort(), 2500)
-          const serpUrl = `https://serpapi.com/search.json?engine=google_shopping&q=${encodeURIComponent(enrichedItem.searchQuery)}&api_key=${process.env.SERPAPI_KEY}&num=1`
+          console.log(`SerpAPI request for: ${enrichedItem.searchQuery}`)
+          const serpUrl = `https://serpapi.com/search.json?engine=google_shopping&q=${encodeURIComponent(enrichedItem.searchQuery)}&api_key=${process.env.SERPAPI_KEY}&num=8&gl=in&hl=en`
           const serpRes = await fetch(serpUrl, { signal: controller.signal })
           clearTimeout(timeout)
           const serpData = await serpRes.json()
+          console.log(`SerpAPI results found: ${serpData.shopping_results?.length || 0}`)
 
-          if (serpData.shopping_results && serpData.shopping_results.length > 0) {
-            const result = serpData.shopping_results[0]
-            enrichedItem.productImageUrl = result.thumbnail
-            enrichedItem.productLink = result.link
-            enrichedItem.productSource = result.source
+            if (serpData.shopping_results && serpData.shopping_results.length > 0) {
+              const rawStores = serpData.shopping_results
+                .map((result) => ({
+                  store: result.source || 'Store',
+                  title: result.title || enrichedItem.name,
+                  link: result.link || result.product_link || '',
+                  price: result.price || '',
+                  priceValue: extractPriceAmount(result.price),
+                  delivery: result.delivery || '',
+                  thumbnail: result.thumbnail || result.image || ''
+                }))
+                .filter((store) => store.link)
+
+              // Sort by price (cheapest first)
+              const pricedStores = rawStores
+                .filter(s => Number.isFinite(s.priceValue))
+                .sort((a, b) => a.priceValue - b.priceValue)
+              
+              const unpricedStores = rawStores.filter(s => !Number.isFinite(s.priceValue))
+              const sortedStores = [...pricedStores, ...unpricedStores]
+
+              // Take top 4 for the UI
+              const candidateStores = sortedStores.slice(0, 4)
+
+              // Step 2: Resolve stores into direct merchant links (PDP)
+              await Promise.all(candidateStores.map(async (store) => {
+                const lowerStore = store.store.toLowerCase();
+                const isMajorStore = lowerStore.includes('amazon') || 
+                                     lowerStore.includes('myntra') || 
+                                     lowerStore.includes('flipkart') || 
+                                     lowerStore.includes('ajio');
+
+                // Try to resolve via Google Product ID if available
+                const originalResult = serpData.shopping_results.find(r => r.source === store.store && r.title === store.title);
+                if (originalResult?.product_id) {
+                  try {
+                    const productUrl = `https://serpapi.com/search.json?engine=google_product&product_id=${originalResult.product_id}&api_key=${process.env.SERPAPI_KEY}&gl=in&hl=en`
+                    const productRes = await fetch(productUrl);
+                    const productData = await productRes.json();
+                    if (productData.sellers_results?.online_sellers) {
+                      const seller = productData.sellers_results.online_sellers.find(s => s.name.toLowerCase().includes(lowerStore));
+                      if (seller?.link) {
+                        console.log(`Resolved ${store.store} via Product ID to: ${seller.link.substring(0, 40)}...`);
+                        store.link = seller.link;
+                        return;
+                      }
+                    }
+                  } catch (e) {
+                    console.error('Product ID resolution failed', e.message);
+                  }
+                }
+
+                // Fallback to organic search
+                if (isMajorStore || store.link.includes('google.com')) {
+                  try {
+                    let siteFilter = '';
+                    if (lowerStore.includes('amazon')) siteFilter = 'site:amazon.in';
+                    else if (lowerStore.includes('myntra')) siteFilter = 'site:myntra.com';
+                    else if (lowerStore.includes('flipkart')) siteFilter = 'site:flipkart.com';
+                    else if (lowerStore.includes('ajio')) siteFilter = 'site:ajio.com';
+
+                    const searchQuery = `${store.title} ${siteFilter} buy`;
+                    const organicUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(searchQuery)}&api_key=${process.env.SERPAPI_KEY}&num=3&gl=in&hl=en`
+                    const organicRes = await fetch(organicUrl)
+                    const organicData = await organicRes.json()
+                    
+                    if (organicData.organic_results && organicData.organic_results.length > 0) {
+                      const bestLink = organicData.organic_results.find(res => 
+                        res.link.includes('/dp/') || res.link.includes('/p/') || 
+                        res.link.includes('/buy') || res.link.includes('/product') ||
+                        res.link.includes('.html')
+                      ) || organicData.organic_results[0];
+
+                      if (bestLink?.link) {
+                        console.log(`Resolved ${store.store} via Organic to: ${bestLink.link.substring(0, 40)}...`)
+                        store.link = bestLink.link
+                      }
+                    }
+                  } catch (e) {
+                    console.error('Organic resolution failed for', store.store, e.message)
+                  }
+                }
+              }))
+
+              enrichedItem.stores = candidateStores
+
+              // The very first result in candidateStores is our "Best Match" (cheapest)
+              const bestMatch = candidateStores[0] || serpData.shopping_results[0]
+              
+              enrichedItem.productImageUrl = bestMatch.thumbnail || bestMatch.image || bestMatch.image_url
+              enrichedItem.productLink = bestMatch.link || bestMatch.product_link
+              enrichedItem.productSource = bestMatch.store || bestMatch.source || 'Shop'
+              
+              if (bestMatch.price) {
+                enrichedItem.priceLabel = bestMatch.price
+              }
+              if (Number.isFinite(bestMatch.priceValue)) {
+                enrichedItem.bestPrice = bestMatch.priceValue
+              }
+            }
+          } catch (e) {
+            console.error('SerpAPI error for item', item.name, e.message || e)
+            enrichedItem.stores = buildIndiaStoreSearches(enrichedItem.searchQuery)
           }
-        } catch (e) {
-          console.error('SerpAPI error for item', item.name, e.message || e)
-        }
 
-        return enrichedItem
-      })
-    )
+          if (!enrichedItem.stores || !enrichedItem.stores.length) {
+            enrichedItem.stores = buildIndiaStoreSearches(enrichedItem.searchQuery)
+          }
 
-    res.json({ success: true, items: enrichedItems })
+          if (!enrichedItem.productImageUrl) {
+            enrichedItem.productImageUrl = enrichedItem.fallbackImageUrl
+          }
+
+          return enrichedItem
+        })
+      )
+
+    const budgetFilteredItems = numericBudget
+      ? enrichedItems.filter((item) => {
+          const comparablePrice = Number.isFinite(item.bestPrice) ? item.bestPrice : item.estimatedPrice
+          return comparablePrice <= numericBudget
+        })
+      : enrichedItems
+
+    const finalItems = (budgetFilteredItems.length ? budgetFilteredItems : enrichedItems).slice(0, 6)
+
+    res.json({ success: true, items: finalItems })
 
   } catch (err) {
     console.error('Discover items error:', err.message)
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/api/image-architect', requireAuth, async (req, res) => {
+  try {
+    const { imageBase64, mimeType, targetAesthetic, profile, wardrobe } = req.body
+
+    if (!imageBase64 || !mimeType) {
+      throw new Error('Image upload is required')
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY missing or not configured')
+    }
+
+    const systemPrompt = `Role: Expert Image Architect and Biometric Stylist.
+Objective: Deconstruct the user's uploaded image to identify aesthetic leakage and provide a technical roadmap to reach the chosen target aesthetic.
+Return ONLY valid JSON. No markdown, no preamble.`
+
+    const wardrobeList = Array.isArray(wardrobe) && wardrobe.length
+      ? wardrobe
+          .map(item => `- ${item.name || 'Unnamed'} (${item.category || 'Unknown'}, ${item.color || 'Unknown'})`)
+          .join('\n')
+      : 'No wardrobe items provided'
+
+    const userPrompt = `
+Target aesthetic: ${targetAesthetic || 'Quiet Luxury'}
+
+Profile:
+- Gender: ${profile?.gender || 'Unknown'}
+- Age: ${profile?.age || 'Unknown'}
+- Body Type: ${profile?.bodyType || 'Unknown'}
+- Skin Tone: ${profile?.skinTone || 'Unknown'}
+- Occupation: ${profile?.job || 'Unknown'}
+- Style interests: ${Array.isArray(profile?.styleInterests) && profile.styleInterests.length ? profile.styleInterests.join(', ') : 'Not provided'}
+- Clothing needs: ${Array.isArray(profile?.lifestyleNeeds) && profile.lifestyleNeeds.length ? profile.lifestyleNeeds.join(', ') : 'Not provided'}
+
+Wardrobe snapshot:
+${wardrobeList}
+
+Analyze the image in four phases:
+1. Chromatic & Skin Tone Mapping
+2. Silhouette & Geometric Gap Analysis
+3. Grooming & Structural Engineering
+4. Missing Link recommendations
+
+Then generate outfit suggestions based on this analysis.
+
+JSON shape:
+{
+  "phase1": {
+    "hexCodes": ["#000000"],
+    "undertone": "",
+    "contrastRatio": "",
+    "powerPalette": ["#000000"],
+    "colorSummary": ""
+  },
+  "phase2": {
+    "proportions": "",
+    "hemlineAdvice": "",
+    "volumeAnalysis": "",
+    "frameAdvice": "",
+    "shoulderHipAlignment": ""
+  },
+  "phase3": {
+    "faceShape": "",
+    "hairstyles": ["", "", ""],
+    "groomingSpecs": "",
+    "muscleFocus": ["", ""],
+    "biologicalGoals": ""
+  },
+  "phase4": {
+    "hardware": ["", ""],
+    "footwear": ["", ""],
+    "missingLinkSummary": ""
+  },
+  "outfitSuggestions": [
+    {
+      "name": "",
+      "category": "Shirt",
+      "reason": "",
+      "styleUpgrade": "",
+      "searchQuery": "",
+      "estimatedPrice": 3500
+    }
+  ],
+  "summary": ""
+}
+`
+
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: `${systemPrompt}\n\n${userPrompt}` },
+              { inline_data: { mime_type: mimeType, data: imageBase64 } }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.3,
+            response_mime_type: 'application/json'
+          }
+        })
+      }
+    )
+
+    const geminiData = await geminiResponse.json()
+    if (!geminiResponse.ok) {
+      throw new Error(geminiData?.error?.message || 'Gemini image architect request failed')
+    }
+
+    const rawText = extractGeminiTextPayload(geminiData)
+    const parsed = parseJsonFromText(rawText)
+    const outfitSuggestions = Array.isArray(parsed.outfitSuggestions) ? parsed.outfitSuggestions.slice(0, 6) : []
+
+    const enrichedSuggestions = outfitSuggestions.map((item) => ({
+      name: item.name || 'Architect recommendation',
+      category: item.category || 'Accessory',
+      reason: item.reason || 'Recommended from the biometric style analysis.',
+      styleUpgrade: item.styleUpgrade || 'This supports the target aesthetic and improves visual structure.',
+      searchQuery: item.searchQuery || item.name || 'fashion item',
+      estimatedPrice: Math.max(499, Math.round(Number(item.estimatedPrice) || 2999)),
+      fallbackImageUrl: buildFallbackProductImage(item.name || 'fashion item', item.category || 'Accessory')
+    }))
+
+    res.json({
+      success: true,
+      analysis: {
+        phase1: parsed.phase1 || {},
+        phase2: parsed.phase2 || {},
+        phase3: parsed.phase3 || {},
+        phase4: parsed.phase4 || {},
+        summary: parsed.summary || ''
+      },
+      outfitSuggestions: enrichedSuggestions
+    })
+  } catch (err) {
+    console.error('Image architect error:', err.message)
     res.status(500).json({ success: false, error: err.message })
   }
 })
@@ -755,6 +1316,7 @@ if (!process.env.VERCEL) {
     console.log('  POST /api/remove-bg')
     console.log('  POST /api/generate-outfit')
     console.log('  POST /api/discover-items')
+    console.log('  POST /api/image-architect')
   })
 
   server.on('error', (err) => {

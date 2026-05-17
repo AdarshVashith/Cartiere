@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase/firebase';
-import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, updateDoc, addDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import MainLayout from '../components/MainLayout';
 import './GenerateOutfit.css';
@@ -170,13 +170,37 @@ export default function GenerateOutfit() {
     }
   };
 
+  const [feedback, setFeedback] = useState(null); // 'like', 'dislike'
+
+  const handleFeedback = async (type) => {
+    setFeedback(type);
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      if (type === 'like') {
+        const feedbackRef = collection(db, 'users', user.uid, 'outfit_feedback');
+        await addDoc(feedbackRef, {
+          outfitName: result.outfitName,
+          items: result.items,
+          occasion,
+          timeOfDay,
+          vibe,
+          timestamp: new Date().toISOString(),
+          type: 'like'
+        });
+      }
+    } catch (err) {
+      console.error("Failed to save feedback:", err);
+    }
+  };
+
   const handleMarkAsWorn = async () => {
     try {
       const user = auth.currentUser;
       if (!user) return;
       
       const updatePromises = result.items.map(async (item) => {
-        // Find the original wardrobe item ID
         const originalItem = wardrobe.find(w => w.name === item.name);
         if (originalItem && originalItem.id) {
           const docRef = doc(db, 'users', user.uid, 'wardrobe', originalItem.id);
@@ -192,6 +216,16 @@ export default function GenerateOutfit() {
       });
       
       await Promise.all(updatePromises);
+
+      // Save worn outfit to localStorage for Home page (24hr display)
+      const wornOutfitData = {
+        imageUrl: outfitPreviewUrl || profile.avatarUrl || '',
+        outfitName: result.outfitName,
+        items: result.items.map(i => ({ name: i.name, category: i.category })),
+        timestamp: Date.now()
+      };
+      localStorage.setItem(`worn-outfit:${user.uid}`, JSON.stringify(wornOutfitData));
+
       navigate('/home');
     } catch (err) {
       console.error("Failed to update wear count:", err);
@@ -372,6 +406,34 @@ export default function GenerateOutfit() {
                         <p className="cat" style={{ marginBottom: '2px', fontSize: '10px', fontWeight: '700', color: 'var(--text-secondary)' }}>HAIR & GROOMING</p>
                         <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{result.hairTip}</p>
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="result-feedback-luxe fade-in-up" style={{ animationDelay: '0.25s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '20px 0', padding: '16px', background: 'rgba(255,255,255,0.4)', borderRadius: '20px', border: '1px solid var(--border)' }}>
+                    <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-secondary)', margin: 0 }}>Love this look?</p>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button 
+                        onClick={() => handleFeedback('dislike')} 
+                        style={{ 
+                          width: '44px', height: '44px', borderRadius: '50%', border: '1px solid var(--border)', 
+                          background: feedback === 'dislike' ? '#FF4B4B' : 'white', 
+                          color: feedback === 'dislike' ? 'white' : '#FF4B4B',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.3s'
+                        }}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7L2 14c0 1.1.9 2 2 2h6zM21 2h-3v9h3V2z"/></svg>
+                      </button>
+                      <button 
+                        onClick={() => handleFeedback('like')} 
+                        style={{ 
+                          width: '44px', height: '44px', borderRadius: '50%', border: '1px solid var(--border)', 
+                          background: feedback === 'like' ? '#00B894' : 'white', 
+                          color: feedback === 'like' ? 'white' : '#00B894',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.3s'
+                        }}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                      </button>
                     </div>
                   </div>
 

@@ -4,12 +4,19 @@ import { auth, db } from '../firebase/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import './HeaderNav.css';
+import { warnFirestorePermission } from '../firebase/firestoreErrors';
+import { mergeDiscoverState } from '../utils/discoverAccess';
 
 const HeaderNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [profile, setProfile] = useState(null);
   const [scrolled, setScrolled] = useState(false);
+  const [discoverRefreshTick, setDiscoverRefreshTick] = useState(0);
+  const discoverLocked = !mergeDiscoverState(
+    { ...(profile || {}), __discoverRefreshTick: discoverRefreshTick },
+    auth.currentUser?.uid
+  ).isWardrobeComplete;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -22,19 +29,51 @@ const HeaderNav = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) setProfile(userDoc.data());
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) setProfile(userDoc.data());
+          else setProfile({});
+        } catch (error) {
+          setProfile({});
+          warnFirestorePermission('Header profile load failed:', error);
+        }
+      } else {
+        setProfile(null);
       }
     });
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const handleDiscoverSettingsUpdated = () => {
+      setDiscoverRefreshTick((value) => value + 1);
+    };
+
+    window.addEventListener('discover-settings-updated', handleDiscoverSettingsUpdated);
+    return () => window.removeEventListener('discover-settings-updated', handleDiscoverSettingsUpdated);
+  }, []);
+
   const navItems = [
     { label: 'Home', path: '/home' },
     { label: 'Wardrobe', path: '/wardrobe' },
-    { label: 'Discover', path: '/discover' },
+    {
+      label: 'Discover',
+      path: '/discover',
+      disabled: discoverLocked,
+      helper: 'Confirm your full wardrobe first'
+    },
     { label: 'Wishlist', path: '/wishlist' },
   ];
+
+  const handleNavClick = (item) => {
+    if (item.disabled) {
+      window.alert('Discover unlocks after you confirm in Wardrobe that this is your full wardrobe.')
+      navigate('/wardrobe')
+      return
+    }
+
+    navigate(item.path)
+  }
 
   return (
     <nav className={`header-nav ${scrolled ? 'scrolled' : ''}`}>
@@ -47,10 +86,12 @@ const HeaderNav = () => {
           {navItems.map((item) => (
             <div 
               key={item.path}
-              className={`nav-link-item ${location.pathname === item.path ? 'active' : ''}`}
-              onClick={() => navigate(item.path)}
+              className={`nav-link-item ${location.pathname === item.path ? 'active' : ''} ${item.disabled ? 'disabled' : ''}`}
+              onClick={() => handleNavClick(item)}
+              title={item.disabled ? item.helper : item.label}
             >
               {item.label}
+              {item.disabled && <span className="nav-lock-indicator">Locked</span>}
               {location.pathname === item.path && <div className="nav-underline-accent" />}
             </div>
           ))}

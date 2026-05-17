@@ -3,6 +3,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase/firebase";
+import { warnFirestorePermission } from "../firebase/firestoreErrors";
 import "./Home.css";
 
 const NavItem = ({ icon, label, active = false, onClick }) => (
@@ -23,6 +24,7 @@ function Home() {
   const [spinning, setSpinning] = useState(false);
   const [greeting, setGreeting] = useState("");
   const [weather, setWeather] = useState({ temp: 24, icon: "01d", city: "Delhi", desc: "Clear Sky" });
+  const [wornOutfit, setWornOutfit] = useState(null);
 
   const todayStr = useMemo(() => {
     return new Date().toLocaleDateString('en-US', { 
@@ -75,6 +77,22 @@ function Home() {
       }
       setUser(u);
       
+      // Load worn outfit from local storage
+      try {
+        const cachedWornOutfitStr = localStorage.getItem(`worn-outfit:${u.uid}`);
+        if (cachedWornOutfitStr) {
+          const cached = JSON.parse(cachedWornOutfitStr);
+          // Check if < 24 hrs
+          if (Date.now() - cached.timestamp < 24 * 60 * 60 * 1000) {
+            setWornOutfit(cached);
+          } else {
+            localStorage.removeItem(`worn-outfit:${u.uid}`);
+          }
+        }
+      } catch(e) {
+        console.error('Error reading worn outfit from local storage:', e);
+      }
+
       try {
         const { getDocs, collection } = await import('firebase/firestore');
         const userDoc = await getDoc(doc(db, 'users', u.uid));
@@ -92,7 +110,12 @@ function Home() {
           setScore(calculatedScore);
         }
       } catch (err) {
-        console.error("Error fetching home data:", err);
+        setProfile((current) => current || {
+          name: u.displayName || u.email?.split('@')[0] || 'StyleMate',
+          avatarUrl: null,
+        });
+        setScore(0);
+        warnFirestorePermission("Error fetching home data:", err);
       } finally {
         setLoading(false);
       }
@@ -113,6 +136,14 @@ function Home() {
     setTimeout(() => setSpinning(false), 600);
   };
 
+  const currentLookImage = wornOutfit?.imageUrl || profile?.avatarUrl;
+  const currentLookTitle = wornOutfit ? wornOutfit.outfitName : "Smart Casual";
+  const currentItems = wornOutfit ? wornOutfit.items : [
+    { name: "Black Sweatshirt", category: "TOPS", color: "#1A1A1A" },
+    { name: "Olive Jacket", category: "OUTERWEAR", color: "#556B2F" },
+    { name: "Blue Jeans", category: "BOTTOMS", color: "#1C4D8A" }
+  ];
+
   return (
     <MainLayout>
       <div className="home-editorial-root">
@@ -129,8 +160,8 @@ function Home() {
               <div className="outfit-badge-floating">TODAY'S LOOK</div>
               
               <div className="outfit-image-wrapper">
-                {profile?.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="Avatar" className="outfit-hero-avatar" />
+                {currentLookImage ? (
+                  <img src={currentLookImage} alt="Avatar or Outfit" className="outfit-hero-avatar" />
                 ) : (
                   <div className="avatar-placeholder-editorial">
                     <button onClick={() => navigate('/generate-model')}>✦ Generate Digital Twin</button>
@@ -142,7 +173,7 @@ function Home() {
               <div className="outfit-details-editorial">
                 <div className="outfit-header-row">
                   <div>
-                    <h2 className="outfit-title">Smart Casual</h2>
+                    <h2 className="outfit-title">{currentLookTitle}</h2>
                     <span className="occasion-pill">OFFICE & MEETINGS</span>
                   </div>
                   <button className="save-look-btn">
@@ -151,15 +182,11 @@ function Home() {
                 </div>
 
                 <div className="items-list-editorial">
-                  {[
-                    { name: "Black Sweatshirt", cat: "TOPS", col: "#1A1A1A" },
-                    { name: "Olive Jacket", cat: "OUTERWEAR", col: "#556B2F" },
-                    { name: "Blue Jeans", cat: "BOTTOMS", col: "#1C4D8A" }
-                  ].map((it, idx) => (
+                  {currentItems.map((it, idx) => (
                     <div className="item-editorial-row" key={idx}>
-                      <div className="item-dot" style={{ backgroundColor: it.col }}></div>
+                      <div className="item-dot" style={{ backgroundColor: it.color || '#1A1A1A' }}></div>
                       <span className="item-name">{it.name}</span>
-                      <span className="item-cat-label">{it.cat}</span>
+                      <span className="item-cat-label">{it.cat || it.category}</span>
                     </div>
                   ))}
                 </div>

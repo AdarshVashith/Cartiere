@@ -5,6 +5,7 @@ import { doc, getDoc } from "firebase/firestore";
 import BodyDetailsStep from "../../components/BodyDetailsStep";
 import ImageUploadStep from "../../components/ImageUploadStep";
 import { auth, db } from "../../firebase/firebase";
+import { warnFirestorePermission } from "../../firebase/firestoreErrors";
 import FaceScan from "./FaceScan";
 
 function OnboardingPage() {
@@ -47,7 +48,7 @@ function OnboardingPage() {
             }
           }
         } catch (error) {
-          console.error("Error loading onboarding progress:", error);
+          warnFirestorePermission("Error loading onboarding progress:", error);
         }
       }
       

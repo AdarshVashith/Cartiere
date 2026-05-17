@@ -1,94 +1,136 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import MainLayout from '../components/MainLayout';
+import { auth, db } from '../firebase/firebase';
+import callBackend from '../utils/apiClient';
+import { mergeDiscoverState, writeLocalDiscoverState } from '../utils/discoverAccess';
 import './ImageArchitect.css';
 
-const SYSTEM_PROMPT = `Role: Expert Image Architect and Biometric Stylist.
-Objective: Deconstruct the user's uploaded image to identify aesthetic "leakage" and provide a technical roadmap to reach a [Target Aesthetic].
-
-Phase 1: Chromatic & Skin Tone Mapping
-- Color Sampling: Extract HEX codes of primary colors in current outfit.
-- Undertone Analysis: Determine if Cool, Warm, or Neutral.
-- Contrast Ratio: Evaluate contrast between skin/hair and clothing. Suggest "Power Palette" of 5 HEX codes.
-
-Phase 2: Silhouette & Geometric Gap Analysis
-- "Rule of Thirds" Check: Analyze vertical proportions (1:1 or 1:2). Suggest hemline adjustments.
-- Volume Mapping: Identify where fabric is too "loud" or too "tight".
-- Shoulder-to-Hip Alignment: Suggest specific cuts to achieve desired frame.
-
-Phase 3: Grooming & Structural Engineering
-- Cranial Geometry: Identify face shape.
-- Hair & Beard Interpolation: 3 hairstyle names + Fade Level/Length.
-- Biological Goals: 2-3 key muscle groups to develop for target fit.
-
-Phase 4: The "Missing Link" List
-- Hardware & Accessories: 3 metal finishes based on skin tone.
-- Footwear Anchor: 2 shoe silhouettes.
-
-Output: Return ONLY a valid JSON object with the following structure:
-{
-  "phase1": { "hexCodes": [], "undertone": "", "powerPalette": [] },
-  "phase2": { "proportions": "", "hemlineAdvice": "", "volumeAnalysis": "", "frameAdvice": "" },
-  "phase3": { "faceShape": "", "hairstyles": [], "groomingSpecs": "", "muscleFocus": [] },
-  "phase4": { "hardware": [], "footwear": [] },
-  "summary": ""
-}`;
+function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      resolve(result.split(',')[1] || '');
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function ImageArchitect() {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [wardrobe, setWardrobe] = useState([]);
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
   const [targetAesthetic, setTargetAesthetic] = useState('Quiet Luxury');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setImage(file);
-      setPreview(URL.createObjectURL(file));
-    }
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        navigate('/login');
+        return;
+      }
+
+      setUser(firebaseUser);
+
+      let profileData = {};
+      try {
+        const profileSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+        if (profileSnap.exists()) {
+          profileData = profileSnap.data();
+          setProfile(profileData);
+        } else {
+          setProfile({});
+        }
+      } catch (error) {
+        setProfile({});
+      }
+
+      const discoverState = mergeDiscoverState(profileData, firebaseUser.uid);
+      if (discoverState.targetAesthetic) {
+        setTargetAesthetic(discoverState.targetAesthetic);
+      }
+
+      try {
+        const wardrobeSnap = await getDocs(collection(db, 'users', firebaseUser.uid, 'wardrobe'));
+        setWardrobe(wardrobeSnap.docs.map((item) => ({ id: item.id, ...item.data() })));
+      } catch (error) {
+        setWardrobe([]);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
+
+  const handleImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImage(file);
+    setPreview(URL.createObjectURL(file));
   };
 
   const analyzeImage = async () => {
-    if (!image) return;
+    if (!image || !user) return;
     setLoading(true);
-    setError(null);
+    setError('');
 
     try {
-      // Convert image to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(image);
-      reader.onload = async () => {
-        const base64Image = reader.result.split(',')[1];
-        
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: `${SYSTEM_PROMPT}\n\nTarget Aesthetic: ${targetAesthetic}` },
-                { inline_data: { mime_type: image.type, data: base64Image } }
-              ]
-            }],
-            generationConfig: {
-              response_mime_type: "application/json",
-            }
-          })
-        });
+      const imageBase64 = await toBase64(image);
+      const data = await callBackend('/api/image-architect', {
+        imageBase64,
+        mimeType: image.type,
+        targetAesthetic,
+        profile: {
+          gender: profile?.gender,
+          age: profile?.age,
+          bodyType: profile?.bodyType,
+          skinTone: profile?.skinTone,
+          job: profile?.job,
+          styleInterests: mergeDiscoverState(profile, user.uid).styleInterests,
+          lifestyleNeeds: mergeDiscoverState(profile, user.uid).lifestyleNeeds
+        },
+        wardrobe: wardrobe.map((item) => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          color: item.color
+        }))
+      });
 
-        const data = await response.json();
-        if (data.candidates && data.candidates[0].content.parts[0].text) {
-          const jsonResponse = JSON.parse(data.candidates[0].content.parts[0].text);
-          setResult(jsonResponse);
-        } else {
-          throw new Error('Failed to get analysis');
-        }
-        setLoading(false);
-      };
+      setResult(data);
+
+      writeLocalDiscoverState(user.uid, {
+        ...mergeDiscoverState(profile, user.uid),
+        targetAesthetic,
+        architectSummary: data.analysis?.summary || ''
+      });
+
+      await setDoc(
+        doc(db, 'users', user.uid),
+        {
+          targetAesthetic,
+          architectSummary: data.analysis?.summary || '',
+          architectAnalysis: data.analysis || {},
+          architectOutfitSuggestions: data.outfitSuggestions || []
+        },
+        { merge: true }
+      );
     } catch (err) {
       console.error(err);
-      setError('Analysis failed. Please try again.');
+      if (result) {
+        setError('Analysis completed locally, but Firebase sync is blocked.');
+      } else {
+        setError(err.message || 'Analysis failed. Please try again.');
+      }
+    } finally {
       setLoading(false);
     }
   };
@@ -97,14 +139,24 @@ export default function ImageArchitect() {
     <MainLayout>
       <div className="architect-container">
         <header className="architect-header fade-in-down">
-          <h1 className="premium-title">Image Architect</h1>
-          <p className="premium-subtitle">Biometric analysis & aesthetic engineering</p>
+          <div className="architect-header-top">
+            <div>
+              <h1 className="premium-title">Image Architect</h1>
+              <p className="premium-subtitle">Biometric stylist, aesthetic diagnostics, and target-look engineering</p>
+            </div>
+            <div className="discover-subnav architect-subnav">
+              <button type="button" className="discover-subnav-pill" onClick={() => navigate('/discover')}>
+                Wardrobe Discover
+              </button>
+              <button type="button" className="discover-subnav-pill active">Image Architect</button>
+            </div>
+          </div>
         </header>
 
         <div className="architect-main-grid">
           <div className="upload-section fade-in-up">
-            <div className={`preview-box ${!preview ? 'empty' : ''}`} onClick={() => document.getElementById('fileInput').click()}>
-              {preview ? <img src={preview} alt="Preview" /> : <span>✦ Upload Full Body Shot</span>}
+            <div className={`preview-box ${!preview ? 'empty' : ''}`} onClick={() => document.getElementById('fileInput')?.click()}>
+              {preview ? <img src={preview} alt="Preview" /> : <span>Upload a reference image</span>}
               <input type="file" id="fileInput" hidden onChange={handleImageChange} accept="image/*" />
             </div>
 
@@ -120,19 +172,15 @@ export default function ImageArchitect() {
               </select>
             </div>
 
-            <button 
-              className="btn-generate-luxe" 
-              onClick={analyzeImage} 
-              disabled={!image || loading}
-            >
-              {loading ? 'Analyzing Geometry...' : 'Initiate Analysis ✦'}
+            <button className="btn-generate-luxe" onClick={analyzeImage} disabled={!image || loading}>
+              {loading ? 'Analyzing Geometry...' : 'Analyze Target Image'}
             </button>
           </div>
 
           <div className="result-section">
             {!result && !loading && (
               <div className="empty-result fade-in">
-                <p>Upload a photo to begin biometric deconstruction.</p>
+                <p>Upload a person you want to become like and StyleMate will break down the visual roadmap to reach that aesthetic.</p>
               </div>
             )}
 
@@ -145,61 +193,94 @@ export default function ImageArchitect() {
 
             {result && (
               <div className="analysis-result fade-in-up">
-                {/* Phase 1 */}
                 <div className="result-card">
                   <h3 className="card-title">Phase 1: Chromatic Mapping</h3>
                   <div className="palette-grid">
-                    {result.phase1.powerPalette.map((hex, i) => (
-                      <div key={i} className="color-item">
-                        <div className="swatch" style={{ background: hex }}></div>
+                    {(result.analysis?.phase1?.powerPalette || []).map((hex, index) => (
+                      <div key={`${hex}-${index}`} className="color-item">
+                        <div className="swatch" style={{ background: hex }} />
                         <span className="hex">{hex}</span>
                       </div>
                     ))}
                   </div>
-                  <p className="analysis-text"><strong>Undertone:</strong> {result.phase1.undertone}</p>
+                  <p className="analysis-text"><strong>Undertone:</strong> {result.analysis?.phase1?.undertone}</p>
+                  <p className="analysis-text"><strong>Contrast Ratio:</strong> {result.analysis?.phase1?.contrastRatio}</p>
+                  <p className="analysis-text">{result.analysis?.phase1?.colorSummary}</p>
                 </div>
 
-                {/* Phase 2 */}
                 <div className="result-card">
                   <h3 className="card-title">Phase 2: Silhouette Gap</h3>
                   <div className="stats-mini-grid">
                     <div className="stat-item">
                       <label>Proportions</label>
-                      <span>{result.phase2.proportions}</span>
+                      <span>{result.analysis?.phase2?.proportions}</span>
+                    </div>
+                    <div className="stat-item">
+                      <label>Alignment</label>
+                      <span>{result.analysis?.phase2?.shoulderHipAlignment}</span>
                     </div>
                   </div>
-                  <p className="analysis-text">{result.phase2.frameAdvice}</p>
-                  <p className="analysis-text"><em>Hemline Adjustment:</em> {result.phase2.hemlineAdvice}</p>
+                  <p className="analysis-text">{result.analysis?.phase2?.volumeAnalysis}</p>
+                  <p className="analysis-text"><strong>Frame Advice:</strong> {result.analysis?.phase2?.frameAdvice}</p>
+                  <p className="analysis-text"><strong>Hemline Adjustment:</strong> {result.analysis?.phase2?.hemlineAdvice}</p>
                 </div>
 
-                {/* Phase 3 */}
                 <div className="result-card">
                   <h3 className="card-title">Phase 3: Structural Engineering</h3>
-                  <p className="analysis-text"><strong>Face Shape:</strong> {result.phase3.faceShape}</p>
+                  <p className="analysis-text"><strong>Face Shape:</strong> {result.analysis?.phase3?.faceShape}</p>
                   <div className="tag-cloud">
-                    {result.phase3.hairstyles.map((h, i) => <span key={i} className="tag-luxe">{h}</span>)}
+                    {(result.analysis?.phase3?.hairstyles || []).map((item, index) => (
+                      <span key={`${item}-${index}`} className="tag-luxe">{item}</span>
+                    ))}
                   </div>
-                  <p className="analysis-text"><strong>Biological Goals:</strong> {result.phase3.muscleFocus.join(', ')}</p>
+                  <p className="analysis-text"><strong>Hair & Beard Specs:</strong> {result.analysis?.phase3?.groomingSpecs}</p>
+                  <p className="analysis-text"><strong>Biological Goals:</strong> {(result.analysis?.phase3?.muscleFocus || []).join(', ')}</p>
+                  <p className="analysis-text">{result.analysis?.phase3?.biologicalGoals}</p>
                 </div>
 
-                {/* Phase 4 */}
                 <div className="result-card">
-                  <h3 className="card-title">Phase 4: The Missing Link</h3>
+                  <h3 className="card-title">Phase 4: Missing Link</h3>
                   <div className="links-grid">
                     <div className="link-col">
                       <label>Hardware</label>
-                      <ul>{result.phase4.hardware.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                      <ul>{(result.analysis?.phase4?.hardware || []).map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>
                     </div>
                     <div className="link-col">
                       <label>Footwear</label>
-                      <ul>{result.phase4.footwear.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                      <ul>{(result.analysis?.phase4?.footwear || []).map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>
                     </div>
+                  </div>
+                  <p className="analysis-text">{result.analysis?.phase4?.missingLinkSummary}</p>
+                </div>
+
+                <div className="result-card">
+                  <h3 className="card-title">Outfit Suggestions Based On This Analysis</h3>
+                  <div className="architect-suggestion-grid">
+                    {(result.outfitSuggestions || []).map((item, index) => (
+                      <article key={`${item.name}-${index}`} className="architect-suggestion-card">
+                        <div className="architect-suggestion-image">
+                          <img src={item.fallbackImageUrl} alt={item.name} />
+                        </div>
+                        <div className="architect-suggestion-copy">
+                          <span className="tag-luxe">{item.category}</span>
+                          <h4>{item.name}</h4>
+                          <p>{item.reason}</p>
+                          <p className="architect-upgrade-line">{item.styleUpgrade}</p>
+                          <div className="architect-suggestion-actions">
+                            <span className="discover-store-chip-price">Approx. {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(item.estimatedPrice || 0)}</span>
+                            <button className="premium-button-secondary" onClick={() => navigate('/discover')}>
+                              View in Discover
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
                   </div>
                 </div>
 
                 <div className="summary-card">
                   <h4>Architect's Summary</h4>
-                  <p>{result.summary}</p>
+                  <p>{result.analysis?.summary}</p>
                 </div>
               </div>
             )}

@@ -4,6 +4,7 @@ import { auth, db } from '../firebase/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import './Sidebar.css';
+import { warnFirestorePermission } from '../firebase/firestoreErrors';
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -13,8 +14,15 @@ const Sidebar = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) setProfile(userDoc.data());
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) setProfile(userDoc.data());
+        } catch (error) {
+          setProfile(null);
+          warnFirestorePermission('Sidebar profile load failed:', error);
+        }
+      } else {
+        setProfile(null);
       }
     });
     return () => unsubscribe();

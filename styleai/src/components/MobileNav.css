@@ -51,6 +51,10 @@
   color: var(--mauve);
 }
 
+.mobile-nav-item.locked {
+  opacity: 0.6;
+}
+
 .mobile-active-dot {
   position: absolute;
   top: -4px;

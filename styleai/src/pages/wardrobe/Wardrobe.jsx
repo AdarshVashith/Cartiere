@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase/firebase';
 import MainLayout from '../../components/MainLayout';
 import ClothCard from './components/ClothCard';
 import UploadClothModal from './components/UploadClothModal';
 import TryOnModal from './components/TryOnModal';
+import { getDiscoverProfileState, mergeDiscoverState, splitPreferenceInput, writeLocalDiscoverState } from '../../utils/discoverAccess';
 import './Wardrobe.css';
 
 export default function Wardrobe() {
@@ -21,6 +22,15 @@ export default function Wardrobe() {
   const [filterCategory, setFilterCategory] = useState('All')
   const [error, setError] = useState(null)
   const [seedingLoading, setSeedingLoading] = useState(false)
+  const [wearCycleOpen, setWearCycleOpen] = useState(false)
+  const [discoverOpen, setDiscoverOpen] = useState(false)
+  const [discoverSettings, setDiscoverSettings] = useState({
+    isWardrobeComplete: false,
+    styleInterestsInput: '',
+    lifestyleNeedsInput: '',
+    targetAesthetic: 'Quiet Luxury'
+  })
+  const [savingDiscoverSettings, setSavingDiscoverSettings] = useState(false)
 
   const categories = [
     'All', 'Wear Cycle', 'Top', 'Bottom', 'Dress', 
@@ -43,13 +53,33 @@ export default function Wardrobe() {
   }, [user])
 
   const fetchData = async () => {
+    const localDiscoverState = mergeDiscoverState({}, user?.uid)
+    setDiscoverSettings({
+      isWardrobeComplete: localDiscoverState.isWardrobeComplete,
+      styleInterestsInput: localDiscoverState.styleInterests.join(', '),
+      lifestyleNeedsInput: localDiscoverState.lifestyleNeeds.join(', '),
+      targetAesthetic: localDiscoverState.targetAesthetic || 'Quiet Luxury'
+    })
+
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid))
       if (userDoc.exists()) {
         const userData = userDoc.data()
         setAvatarUrl(userData.avatarUrl)
+        const discoverState = mergeDiscoverState(userData, user.uid)
+        setDiscoverSettings({
+          isWardrobeComplete: discoverState.isWardrobeComplete,
+          styleInterestsInput: discoverState.styleInterests.join(', '),
+          lifestyleNeedsInput: discoverState.lifestyleNeeds.join(', '),
+          targetAesthetic: discoverState.targetAesthetic || 'Quiet Luxury'
+        })
       }
 
+    } catch (err) {
+      setError(err.message)
+    }
+
+    try {
       const wardrobeSnap = await getDocs(
         collection(db, 'users', user.uid, 'wardrobe')
       )
@@ -58,11 +88,11 @@ export default function Wardrobe() {
         ...d.data()
       }))
       setWardrobe(items)
-      setLoading(false)
     } catch (err) {
-      setError(err.message)
-      setLoading(false)
+      setError((current) => current || err.message)
     }
+
+    setLoading(false)
   }
 
   // ... (rest of handles kept same) ...
@@ -130,6 +160,43 @@ export default function Wardrobe() {
   const handleTryOn = (cloth) => {
     setSelectedCloth(cloth)
     setShowTryOn(true)
+  }
+
+  const handleDiscoverSettingsChange = (field, value) => {
+    setDiscoverSettings((current) => ({
+      ...current,
+      [field]: value
+    }))
+  }
+
+  const saveDiscoverSettings = async () => {
+    if (!user) return
+    setSavingDiscoverSettings(true)
+    setError(null)
+
+    const nextState = {
+      isWardrobeComplete: discoverSettings.isWardrobeComplete,
+      styleInterests: splitPreferenceInput(discoverSettings.styleInterestsInput),
+      lifestyleNeeds: splitPreferenceInput(discoverSettings.lifestyleNeedsInput),
+      targetAesthetic: discoverSettings.targetAesthetic
+    }
+
+    try {
+      writeLocalDiscoverState(user.uid, nextState)
+      await setDoc(
+        doc(db, 'users', user.uid),
+        nextState,
+        { merge: true }
+      )
+    } catch (err) {
+      setError('Saved locally. Firebase profile sync is blocked: ' + err.message)
+    } finally {
+      setSavingDiscoverSettings(false)
+    }
+
+    if (nextState.isWardrobeComplete) {
+      navigate('/discover')
+    }
   }
 
   const seedWardrobe = async () => {
@@ -327,7 +394,7 @@ export default function Wardrobe() {
             <button
               onClick={seedWardrobe}
               disabled={seedingLoading}
-              className="premium-button-secondary"
+              className="premium-button-secondary samples-btn"
             >
               {seedingLoading ? '...' : '✦ Samples'}
             </button>
@@ -340,60 +407,189 @@ export default function Wardrobe() {
           </div>
         </header>
 
-      {/* Wear Cycle Tracker */}
-      <section className="wear-cycle-section fade-in-up" style={{ animationDelay: '0.1s' }}>
-        <div className="wear-cycle-header">
-          <h3 className="gen-section-title" style={{ border: 'none', padding: 0, margin: 0 }}>Wear Cycle Analysis</h3>
-          <span className="pill-small" style={{ background: 'var(--mauve-soft)', color: 'var(--mauve)' }}>Active Cycle</span>
-        </div>
-        <div className="wear-cycle-stats">
-          <div className="stat-card-mini">
-            <span className="stat-lbl">Total Wears</span>
-            <span className="stat-val">{wardrobe.reduce((acc, curr) => acc + (curr.wearCount || 0), 0)}</span>
-          </div>
-          <div className="stat-card-mini">
-            <span className="stat-lbl">Frozen Items</span>
-            <span className="stat-val">{wardrobe.filter(i => i.isFrozen).length}</span>
-          </div>
-          <div className="stat-card-mini">
-            <span className="stat-lbl">Utilization</span>
-            <span className="stat-val">
-              {wardrobe.length > 0 
-                ? Math.round((wardrobe.filter(i => (i.wearCount || 0) > 0).length / wardrobe.length) * 100) 
-                : 0}%
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <div className="wardrobe-main-flex">
-        {/* Wardrobe grid */}
-        <div className="wardrobe-grid-wrap fade-in-up" style={{ animationDelay: '0.3s' }}>
-          {filteredWardrobe.length === 0 ? (
-            <div className="empty-state-wardrobe">
-              <div className="empty-icon">👕</div>
-              <p className="empty-title">Your wardrobe is looking a bit quiet</p>
-              <p className="empty-text">Add your clothes manually or load our premium samples to get started.</p>
+      <div className="wardrobe-dashboard-layout">
+        <div className="wardrobe-primary-column">
+          <section className={`wear-cycle-section fade-in-up ${wearCycleOpen ? 'wc-open' : ''}`} style={{ animationDelay: '0.1s' }}>
+            <div className="wear-cycle-header" onClick={() => setWearCycleOpen(prev => !prev)}>
+              <div className="wear-cycle-header-copy">
+                <p className="wear-cycle-kicker">Wardrobe Health</p>
+                <h3 className="wear-cycle-title">Wear Cycle Analysis</h3>
+                <p className="wear-cycle-summary wc-desktop-only">
+                  A clean snapshot of how actively your collection is being worn, rotated, and temporarily held back.
+                </p>
+              </div>
+              <span className="wear-cycle-status wc-desktop-only">Active Cycle</span>
+              <span className="wc-toggle-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
             </div>
-          ) : (
-            <div className="wardrobe-grid-premium">
-              {filteredWardrobe.map(cloth => (
-                <ClothCard
-                  key={cloth.id}
-                  cloth={cloth}
-                  onTryOn={handleTryOn}
-                  onWorn={handleWorn}
-                  onDelete={handleDeleteCloth}
-                  onToggleFreeze={handleToggleFreeze}
-                />
-              ))}
+            <div className="wear-cycle-body">
+              <div className="wear-cycle-stats">
+                <div className="stat-card-mini">
+                  <span className="stat-lbl">Total Items</span>
+                  <span className="stat-val">{wardrobe.length}</span>
+                  <span className="stat-meta">Items in your digital closet</span>
+                </div>
+                <div className="stat-card-mini">
+                  <span className="stat-lbl">Total Wears</span>
+                  <span className="stat-val">{wardrobe.reduce((acc, curr) => acc + (curr.wearCount || 0), 0)}</span>
+                  <span className="stat-meta">Across the full wardrobe rotation</span>
+                </div>
+                <div className="stat-card-mini">
+                  <span className="stat-lbl">Frozen Items</span>
+                  <span className="stat-val">{wardrobe.filter(i => i.isFrozen).length}</span>
+                  <span className="stat-meta">Items excluded from styling</span>
+                </div>
+                <div className="stat-card-mini">
+                  <span className="stat-lbl">Utilization</span>
+                  <span className="stat-val">
+                    {wardrobe.length > 0 
+                      ? Math.round((wardrobe.filter(i => (i.wearCount || 0) > 0).length / wardrobe.length) * 100) 
+                      : 0}%
+                  </span>
+                  <span className="stat-meta">Items that entered active rotation</span>
+                </div>
+                <div className="stat-card-mini">
+                  <span className="stat-lbl">Avg Wears</span>
+                  <span className="stat-val">
+                    {wardrobe.length > 0 
+                      ? (wardrobe.reduce((acc, curr) => acc + (curr.wearCount || 0), 0) / wardrobe.length).toFixed(1) 
+                      : 0}
+                  </span>
+                  <span className="stat-meta">Average wears per item</span>
+                </div>
+                <div className="stat-card-mini">
+                  <span className="stat-lbl">Most Worn</span>
+                  <span className="stat-val stat-val-text">
+                    {wardrobe.length > 0 
+                      ? (wardrobe.reduce((best, curr) => (curr.wearCount || 0) > (best.wearCount || 0) ? curr : best, wardrobe[0])?.name || '—').split(' ').slice(0, 3).join(' ')
+                      : '—'}
+                  </span>
+                  <span className="stat-meta">
+                    {wardrobe.length > 0 
+                      ? `${wardrobe.reduce((best, curr) => (curr.wearCount || 0) > (best.wearCount || 0) ? curr : best, wardrobe[0])?.wearCount || 0} wears`
+                      : 'No data yet'}
+                  </span>
+                </div>
+              </div>
             </div>
-          )}
+          </section>
+
+          <section className={`discover-readiness-panel fade-in-up ${discoverOpen ? 'dr-open' : ''}`} style={{ animationDelay: '0.16s' }}>
+            <div className="discover-readiness-header" onClick={() => setDiscoverOpen(prev => !prev)}>
+              <div className="discover-readiness-copy">
+                <p className="wear-cycle-kicker">Discover Readiness</p>
+                <h3 className="wear-cycle-title">Unlock smarter recommendations</h3>
+                <p className="wear-cycle-summary dr-desktop-only">
+                  Confirm when this is your full wardrobe and add your lifestyle interests so Discover only activates once StyleMate has the right context.
+                </p>
+              </div>
+              <span className="dr-toggle-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
+            </div>
+
+            <div className="discover-readiness-body">
+              <div className="discover-readiness-grid">
+                <label className={`wardrobe-complete-toggle ${discoverSettings.isWardrobeComplete ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={discoverSettings.isWardrobeComplete}
+                    onChange={(event) => handleDiscoverSettingsChange('isWardrobeComplete', event.target.checked)}
+                  />
+                  <span className="wardrobe-complete-indicator" />
+                  <span className="wardrobe-complete-copy">
+                    <strong>This is my full wardrobe</strong>
+                    <small>Discover stays locked until you confirm your wardrobe is complete.</small>
+                  </span>
+                </label>
+
+                <div className="discover-settings-form">
+                  <label className="discover-settings-field">
+                    <span>Field of Interest</span>
+                    <input
+                      type="text"
+                      value={discoverSettings.styleInterestsInput}
+                      onChange={(event) => handleDiscoverSettingsChange('styleInterestsInput', event.target.value)}
+                      placeholder="Workwear, date night, streetwear, gym, travel"
+                    />
+                  </label>
+
+                  <label className="discover-settings-field">
+                    <span>Clothing Needs</span>
+                    <input
+                      type="text"
+                      value={discoverSettings.lifestyleNeedsInput}
+                      onChange={(event) => handleDiscoverSettingsChange('lifestyleNeedsInput', event.target.value)}
+                      placeholder="Office meetings, weddings, daily casual, airport looks"
+                    />
+                  </label>
+
+                  <label className="discover-settings-field">
+                    <span>Target Aesthetic</span>
+                    <select
+                      value={discoverSettings.targetAesthetic}
+                      onChange={(event) => handleDiscoverSettingsChange('targetAesthetic', event.target.value)}
+                    >
+                      <option>Quiet Luxury</option>
+                      <option>Industrial Techwear</option>
+                      <option>Scandi-Minimalism</option>
+                      <option>Old Money</option>
+                      <option>Avant-Garde</option>
+                      <option>Streetwear</option>
+                    </select>
+                  </label>
+
+                  <div className="discover-settings-actions">
+                    <button
+                      type="button"
+                      className="premium-button-primary"
+                      onClick={saveDiscoverSettings}
+                      disabled={savingDiscoverSettings}
+                    >
+                      {savingDiscoverSettings ? 'Saving...' : 'Save Discover Settings'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="wardrobe-grid-wrap fade-in-up" style={{ animationDelay: '0.3s' }}>
+            {filteredWardrobe.length === 0 ? (
+              <div className="empty-state-wardrobe">
+                <div className="empty-icon">👕</div>
+                <p className="empty-title">Your wardrobe is looking a bit quiet</p>
+                <p className="empty-text">Add your clothes manually or load our premium samples to get started.</p>
+              </div>
+            ) : (
+              <div className="wardrobe-grid-premium">
+                {filteredWardrobe.map(cloth => (
+                  <ClothCard
+                    key={cloth.id}
+                    cloth={cloth}
+                    onTryOn={handleTryOn}
+                    onWorn={handleWorn}
+                    onDelete={handleDeleteCloth}
+                    onToggleFreeze={handleToggleFreeze}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Category filter Sidebar (Vertical Right) */}
         <aside className="wardrobe-sidebar-right fade-in-up" style={{ animationDelay: '0.2s' }}>
-          <h4 className="sidebar-title">Archive</h4>
+          <div className="sidebar-connector-line" />
+          <div className="sidebar-header-block">
+            <p className="sidebar-kicker">Live Archive</p>
+            <h4 className="sidebar-title">Archive</h4>
+            <p className="sidebar-copy">Filter the collection by category or jump into wear-cycle sorting.</p>
+          </div>
           <div className="filter-vertical-list">
             {categories.map(cat => {
               const icons = {
@@ -421,7 +617,6 @@ export default function Wardrobe() {
               )
             })}
           </div>
-          
         </aside>
       </div>
 

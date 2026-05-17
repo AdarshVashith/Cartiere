@@ -5,8 +5,18 @@
 }
 
 .architect-header {
-  text-align: center;
   margin-bottom: 60px;
+}
+
+.architect-header-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.architect-subnav {
+  margin-bottom: 0;
 }
 
 .architect-main-grid {
@@ -52,12 +62,27 @@
   object-fit: cover;
 }
 
-.preview-box span {
-  font-size: 14px;
-  color: var(--text-secondary);
-  font-weight: 600;
-  letter-spacing: 0.1em;
+.preview-box.empty {
+  flex-direction: column;
+  gap: 16px;
+  background: #fdfdfd;
 }
+
+.preview-box.empty::before {
+  content: '✦';
+  font-size: 32px;
+  color: var(--mauve);
+  opacity: 0.5;
+}
+
+.preview-box span {
+  font-size: 13px;
+  color: var(--mauve);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 
 .control-group {
   margin-bottom: 24px;
@@ -114,6 +139,60 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.architect-suggestion-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.architect-suggestion-card {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: rgba(247, 242, 243, 0.55);
+}
+
+.architect-suggestion-image {
+  height: 200px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: white;
+}
+
+.architect-suggestion-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.architect-suggestion-copy h4 {
+  margin: 12px 0 10px;
+  font-family: var(--font-editorial);
+  font-size: 24px;
+  color: var(--text-primary);
+}
+
+.architect-suggestion-copy p {
+  margin: 0 0 10px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.architect-upgrade-line {
+  color: var(--text-primary) !important;
+  font-weight: 600;
+}
+
+.architect-suggestion-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 10px;
 }
 
 .result-card {
@@ -261,6 +340,132 @@
   margin-bottom: 16px;
 }
 
+@media (max-width: 768px) {
+  .architect-main-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .architect-container {
+    padding: 20px 16px 120px;
+  }
+  
+  .architect-header {
+    margin-bottom: 32px;
+  }
+
+  .architect-header-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .premium-title {
+    font-size: 28px !important;
+    margin-bottom: 8px;
+  }
+
+  .premium-subtitle {
+    font-size: 13px !important;
+    line-height: 1.5;
+  }
+
+  .architect-subnav {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+
+  .discover-subnav-pill {
+    flex: 1;
+    text-align: center;
+    padding: 10px 0;
+    font-size: 11px;
+  }
+
+  .preview-box {
+    height: 320px;
+    margin-bottom: 20px;
+  }
+
+  .upload-section {
+    position: relative;
+    top: 0;
+    padding: 24px;
+    border-radius: 24px;
+    margin-bottom: 32px;
+  }
+
+  .architect-suggestion-card {
+    grid-template-columns: 1fr;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .architect-suggestion-image {
+    height: 240px;
+  }
+
+  .architect-suggestion-copy h4 {
+    font-size: 20px;
+    margin: 8px 0;
+  }
+
+  .architect-suggestion-copy p {
+    font-size: 14px;
+  }
+
+  .result-card {
+    padding: 24px;
+    border-radius: 20px;
+  }
+
+  .card-title {
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+
+  .stats-mini-grid {
+    gap: 12px;
+  }
+
+  .stat-item {
+    padding: 12px;
+  }
+
+  .stat-item span {
+    font-size: 15px;
+  }
+
+  .result-section {
+    min-height: auto;
+  }
+
+  .empty-result {
+    min-height: 200px;
+    padding: 32px;
+    margin-bottom: 40px;
+  }
+
+
+  .links-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .summary-card {
+    padding: 32px 24px;
+  }
+
+  .summary-card h4 {
+    font-size: 22px;
+  }
+
+  .summary-card p {
+    font-size: 14px;
+    line-height: 1.6;
+  }
+}
+
 .summary-card p {
   font-size: 16px;
   line-height: 1.8;
@@ -276,12 +481,4 @@
   font-weight: 600;
 }
 
-@media (max-width: 1024px) {
-  .architect-main-grid {
-    grid-template-columns: 1fr;
-  }
-  .upload-section {
-    position: relative;
-    top: 0;
-  }
-}
+
