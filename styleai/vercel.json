@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://styleai-backend-9in6ih4kx-adarsh-vashishthas-projects.vercel.app/api/$1" },
+    { "source": "/api/(.*)", "destination": "https://styleai-backend-adarsh-vashishthas-projects.vercel.app/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
