@@ -234,42 +234,30 @@ const Landing = () => {
           </div>
 
           <div className="hero-stage">
-            <div className="hero-stage-shell">
-              <div className="hero-stage-topline">
-                <span className="hero-stage-kicker">Style command view</span>
-                <span className="hero-stage-chip">Premium AI model</span>
+            <div className="hero-stage-shell custom-model-stage">
+              <img src="/hero_model.png" alt="StyleMate Model" className="hero-center-model" />
+              
+              <div className="floating-stat stat-1">
+                <div className="stat-dot"></div>
+                <div className="stat-card">
+                  <h4>Gap-aware shopping</h4>
+                  <p>Only items your wardrobe actually needs.</p>
+                </div>
               </div>
 
-              <div className="hero-stage-grid">
-                <div className="hero-stage-portrait">
-                  {profile?.avatarUrl ? (
-                    <img src={profile.avatarUrl} alt="User model" className="hero-avatar-figure" />
-                  ) : (
-                    <div className="hero-avatar-placeholder">
-                      <div className="placeholder-bust" />
-                      <p>Generate your avatar to unlock visual styling previews.</p>
-                    </div>
-                  )}
-                  <div className="portrait-orbit orbit-one" />
-                  <div className="portrait-orbit orbit-two" />
-                  <div className="portrait-orbit orbit-three" />
+              <div className="floating-stat stat-2">
+                <div className="stat-dot"></div>
+                <div className="stat-card">
+                  <h4>Visual try-on</h4>
+                  <p>Preview recommendations on your AI profile.</p>
                 </div>
+              </div>
 
-                <div className="hero-stage-panel">
-                  <div className="hero-panel-card primary">
-                    <p className="panel-eyebrow">Discover Signal</p>
-                    <h3>What should enter the wardrobe next?</h3>
-                    <p>Only gap-filling recommendations with styling logic, reasons, and price comparison.</p>
-                  </div>
-
-                  <div className="showcase-signal-stack">
-                    {showcaseSignals.map((signal, index) => (
-                      <div key={signal.title} className={`showcase-signal-card signal-${index + 1}`}>
-                        <span className="panel-stat">{signal.title}</span>
-                        <span className="panel-copy">{signal.body}</span>
-                      </div>
-                    ))}
-                  </div>
+              <div className="floating-stat stat-3">
+                <div className="stat-dot"></div>
+                <div className="stat-card">
+                  <h4>Target aesthetic</h4>
+                  <p>Refine the exact look you want to grow into.</p>
                 </div>
               </div>
             </div>
