@@ -111,7 +111,7 @@ function Home() {
         }
       } catch (err) {
         setProfile((current) => current || {
-          name: u.displayName || u.email?.split('@')[0] || 'StyleMate',
+          name: u.displayName || u.email?.split('@')[0] || 'Cartieré',
           avatarUrl: null,
         });
         setScore(0);
@@ -149,7 +149,7 @@ function Home() {
       <div className="home-editorial-root">
         {/* Editorial Greeting */}
         <header className="home-editorial-header fade-in-down">
-          <h1 className="editorial-greeting">{greeting}, {profile?.name || 'StyleMate'}</h1>
+          <h1 className="editorial-greeting">{greeting}, {profile?.name || 'Cartieré'}</h1>
           <p className="editorial-subtitle">{todayStr} · Your daily style sync</p>
         </header>
 

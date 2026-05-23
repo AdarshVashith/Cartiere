@@ -16,7 +16,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL && !window.location.hostnam
 export default function GenerateOutfit() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState({ name: 'StyleMate', avatarUrl: '', skinTone: 'neutral', city: '', gender: '', bodyType: '' });
+  const [profile, setProfile] = useState({ name: 'Cartieré', avatarUrl: '', skinTone: 'neutral', city: '', gender: '', bodyType: '' });
   const [wardrobe, setWardrobe] = useState([]);
   const [weatherData, setWeatherData] = useState({ temp: '--', city: '', icon: '', description: '' });
   
@@ -55,7 +55,7 @@ export default function GenerateOutfit() {
         if (userDoc.exists()) {
           const d = userDoc.data();
           setProfile({
-            name: String(d.name || 'StyleMate'),
+            name: String(d.name || 'Cartieré'),
             avatarUrl: String(d.avatarUrl || ''),
             skinTone: String(d.skinTone || 'neutral'),
             city: String(d.city || ''),

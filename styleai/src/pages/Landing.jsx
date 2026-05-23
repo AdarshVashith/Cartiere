@@ -1,26 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import heroModel from "../assets/hero_model.png";
+import cartiereLogo from "../assets/cartiere-logo.png";
+import landingBannerCartiere from "../assets/landing-banner-cartiere.png";
+import capabilityGapImage from "../assets/capability-gap-card.png";
+import capabilityAiRecommendationImage from "../assets/capability-ai-recommendation.png";
+import capabilityTechnicalImage from "../assets/capability-technical-card.png";
 import "./Landing.css";
 
 const capabilityCards = [
   {
-    icon: "compass",
     eyebrow: "Wardrobe Intelligence",
     title: "See what is missing before you buy anything.",
-    body: "StyleMate maps your existing wardrobe, identifies gap categories, and pushes only the pieces that improve outfit range.",
+    body: "Cartieré maps your existing wardrobe, identifies gap categories, and pushes only the pieces that improve outfit range.",
+    image: capabilityGapImage,
   },
   {
-    icon: "spark",
     eyebrow: "Virtual Styling",
     title: "Try recommendations on your AI model before you commit.",
     body: "Preview new clothes on your generated profile and compare looks with more confidence before shopping.",
+    image: capabilityAiRecommendationImage,
   },
   {
-    icon: "grid",
     eyebrow: "Aesthetic Engineering",
     title: "Move toward a sharper target look with technical guidance.",
     body: "Use Image Architect to break down proportions, palette, grooming direction, and structural upgrades for a chosen aesthetic.",
+    image: capabilityTechnicalImage,
   },
 ];
 
@@ -37,12 +42,6 @@ const aestheticStrip = [
   "Old Money",
   "Streetwear",
   "Modern Workwear",
-];
-
-const wardrobeSignals = [
-  "Digital wardrobe archive",
-  "Discover gap analysis",
-  "Virtual try-on previews",
 ];
 
 const heroMetrics = [
@@ -151,7 +150,7 @@ const Landing = () => {
       <nav className={`landing-nav ${scrolled ? "scrolled" : ""}`}>
         <div className="container nav-content">
           <button className="logo-wrap landing-reset-btn" onClick={() => navigate("/")}>
-            <span className="logo">STYLEMATE</span>
+            <img src={cartiereLogo} alt="Cartieré" className="logo-image" />
           </button>
 
           <div className="nav-actions-cluster">
@@ -165,6 +164,12 @@ const Landing = () => {
       </nav>
 
       <main className="landing-main">
+        <section className="landing-banner-section">
+          <div className="landing-banner-frame">
+            <img src={landingBannerCartiere} alt="Cartieré campaign banner" className="landing-banner-image" />
+          </div>
+        </section>
+
         <section className="hero container">
           <div className="hero-copy">
             <div className="hero-kicker-wrap">
@@ -178,7 +183,7 @@ const Landing = () => {
             </h1>
 
             <p className="hero-subtext">
-              StyleMate turns your wardrobe into a high-context styling system: what you own, what you are missing, what fits your aesthetic, and what deserves a place in rotation next.
+              Cartieré turns your wardrobe into a high-context styling system: what you own, what you are missing, what fits your aesthetic, and what deserves a place in rotation next.
             </p>
 
             <div className="hero-btns">
@@ -188,12 +193,6 @@ const Landing = () => {
               <button className="btn-secondary landing-reset-btn" onClick={() => handleNav("/login")}>
                 Explore Discover
               </button>
-            </div>
-
-            <div className="hero-signal-row">
-              {wardrobeSignals.map((signal) => (
-                <span key={signal} className="hero-signal-pill">{signal}</span>
-              ))}
             </div>
 
             <div className="hero-editorial-note">
@@ -208,37 +207,12 @@ const Landing = () => {
             <div className="hero-stage-shell custom-model-stage">
               <div className="hero-stage-halo hero-stage-halo-one" />
               <div className="hero-stage-halo hero-stage-halo-two" />
-              <img src={heroModel} alt="StyleMate Model" className="hero-center-model" />
-              
-              <div className="floating-stat stat-1">
-                <div className="stat-dot"></div>
-                <div className="stat-card">
-                  <h4>Gap-aware shopping</h4>
-                  <p>Only items your wardrobe actually needs.</p>
-                </div>
-              </div>
-
-              <div className="floating-stat stat-2">
-                <div className="stat-dot"></div>
-                <div className="stat-card">
-                  <h4>Visual try-on</h4>
-                  <p>Preview recommendations on your AI profile.</p>
-                </div>
-              </div>
-
-              <div className="floating-stat stat-3">
-                <div className="stat-dot"></div>
-                <div className="stat-card">
-                  <h4>Target aesthetic</h4>
-                  <p>Refine the exact look you want to grow into.</p>
-                </div>
-              </div>
+              <img src={heroModel} alt="Cartieré Model" className="hero-center-model" />
             </div>
 
             <div className="hero-insight-panel">
               <div className="hero-insight-header">
                 <p className="panel-eyebrow">How the system works</p>
-                <span className="hero-insight-badge">Editorial workflow</span>
               </div>
 
               <div className="hero-metrics-grid">
@@ -263,7 +237,6 @@ const Landing = () => {
 
         <section className="capabilities container">
           <div className="section-heading">
-            <p className="section-kicker">System Capabilities</p>
             <h2 className="section-title">A more professional way to manage personal style.</h2>
             <p className="section-description">
               Less random inspiration. More decision support across wardrobe planning, recommendation quality, and personal aesthetic direction.
@@ -273,9 +246,15 @@ const Landing = () => {
           <div className="capabilities-grid">
             {capabilityCards.map((card) => (
               <article key={card.title} className="capability-card">
-                <div className="capability-icon-shell">
-                  <CapabilityIcon type={card.icon} />
-                </div>
+                {card.image ? (
+                  <div className="capability-image-shell">
+                    <img src={card.image} alt={card.title} className="capability-image" />
+                  </div>
+                ) : (
+                  <div className="capability-icon-shell">
+                    <CapabilityIcon type={card.icon} />
+                  </div>
+                )}
                 <p className="capability-eyebrow">{card.eyebrow}</p>
                 <h3>{card.title}</h3>
                 <p>{card.body}</p>
@@ -332,11 +311,11 @@ const Landing = () => {
 
       <footer className="landing-footer">
         <div className="container landing-footer-inner">
-          <div>
-            <div className="logo footer-logo">STYLEMATE</div>
-            <p className="footer-copy">AI fashion direction for wardrobe clarity, stronger taste, and smarter decisions.</p>
-          </div>
-          <div className="footer-meta">© 2026 StyleMate. Built for modern wardrobe planning.</div>
+          <img src={cartiereLogo} alt="Cartieré" className="logo-image footer-logo-image" />
+          <p className="footer-copy">
+            Cartieré is an AI-led wardrobe platform focused on sharper personal taste, clearer buying decisions, and a more intentional way to build style over time.
+          </p>
+          <div className="footer-meta">© 2026 Cartieré. Built for modern wardrobe planning.</div>
         </div>
       </footer>
     </div>

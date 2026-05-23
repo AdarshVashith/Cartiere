@@ -180,7 +180,7 @@ export default function ImageArchitect() {
           <div className="result-section">
             {!result && !loading && (
               <div className="empty-result fade-in">
-                <p>Upload a person you want to become like and StyleMate will break down the visual roadmap to reach that aesthetic.</p>
+                <p>Upload a person you want to become like and Cartieré will break down the visual roadmap to reach that aesthetic.</p>
               </div>
             )}
 

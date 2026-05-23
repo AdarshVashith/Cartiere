@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../firebase/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import cartiereLogo from '../assets/cartiere-logo.png';
 import './HeaderNav.css';
 import { warnFirestorePermission } from '../firebase/firestoreErrors';
 import { mergeDiscoverState } from '../utils/discoverAccess';
@@ -79,7 +80,7 @@ const HeaderNav = () => {
     <nav className={`header-nav ${scrolled ? 'scrolled' : ''}`}>
       <div className="header-nav-inner">
         <div className="brand-logo" onClick={() => navigate('/home')}>
-          STYLEMATE
+          <img src={cartiereLogo} alt="Cartieré" className="brand-logo-image" />
         </div>
 
         <div className="nav-links">

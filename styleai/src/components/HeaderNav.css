@@ -31,14 +31,20 @@
 }
 
 .brand-logo {
-  font-family: var(--font-editorial);
-  font-weight: 700;
-  font-size: 20px;
-  letter-spacing: 0.18em;
-  color: var(--text-primary);
   cursor: pointer;
-  transition: color 0.3s ease;
-  text-transform: uppercase;
+  transition: transform 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand-logo:hover {
+  transform: translateY(-1px);
+}
+
+.brand-logo-image {
+  display: block;
+  width: 150px;
+  height: auto;
 }
 
 .nav-links {
@@ -149,10 +155,13 @@
     padding: 0 16px;
   }
   .brand-logo {
-    font-size: 16px;
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
+  }
+
+  .brand-logo-image {
+    width: 124px;
   }
   .nav-links {
     display: none;

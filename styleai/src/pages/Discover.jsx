@@ -51,7 +51,7 @@ function handleDiscoverImageError(event, item) {
     <svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
       <rect width="600" height="800" fill="#f7f2f3"/>
       <rect x="90" y="120" width="420" height="560" rx="28" fill="#ffffff" stroke="#e7d9dd"/>
-      <text x="300" y="380" text-anchor="middle" font-family="Georgia, serif" font-size="30" fill="#7a5f68">StyleMate</text>
+      <text x="300" y="380" text-anchor="middle" font-family="Georgia, serif" font-size="30" fill="#7a5f68">Cartieré</text>
       <text x="300" y="425" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#9b8a90">Image unavailable</text>
     </svg>
   `)}`
@@ -123,7 +123,7 @@ export default function Discover() {
           bodyType: profile.bodyType,
           skinTone: profile.skinTone,
           age: profile.age,
-          name: profile.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'StyleMate user',
+          name: profile.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Cartieré user',
           job: profile.job || '',
           city: profile.city || '',
           styleInterests: discoverState.styleInterests,
@@ -265,7 +265,7 @@ export default function Discover() {
               <p className="discover-budget-kicker">Discover Locked</p>
               <h3 className="discover-budget-title">Confirm your full wardrobe to unlock recommendations</h3>
               <p className="premium-subtitle">
-                StyleMate only opens Discover after you confirm this is your full wardrobe. That lets the model correctly detect gaps, interests, and missing outfit categories.
+                Cartieré only opens Discover after you confirm this is your full wardrobe. That lets the model correctly detect gaps, interests, and missing outfit categories.
               </p>
               <div className="discover-gate-points">
                 <span>Full wardrobe confirmation</span>

@@ -71,67 +71,143 @@ function Me() {
     { label: "Face shape", value: profile?.faceShape || "—" },
   ];
 
+  const profileName = profile?.name || "Style Enthusiast";
+  const profileCity = profile?.city || "Unknown Location";
+  const profileInitial = profileName?.[0] || "C";
+  const profileIdentity = [profile?.gender, profile?.bodyType, profile?.targetAesthetic]
+    .filter(Boolean)
+    .join(" · ") || "Curated personal profile";
+  const quickSummary = [
+    { label: "City", value: profileCity },
+    { label: "Skin Tone", value: profile?.skinTone || "Saved" },
+    { label: "Aesthetic", value: profile?.targetAesthetic || "Not set" },
+    { label: "Avatar", value: profile?.avatarUrl ? "Ready" : "Missing" },
+  ];
+
   return (
     <MainLayout>
-      <div className="profile-content-wrap">
-        <header className="top-header fade-in-down">
-          <div className="greeting-text">
-            <h1 className="premium-title">My Profile</h1>
-            <p className="premium-subtitle">Your personal style footprint and digital identity</p>
+      <div className="profile-content-wrap profile-lookbook-page">
+        <header className="profile-lookbook-header fade-in-down">
+          <div className="profile-lookbook-headline">
+            <p className="profile-kicker">Profile Center</p>
+            <h1 className="profile-page-title">My Profile</h1>
+            <p className="profile-page-copy">
+              Your details, avatar, and styling baseline in one place.
+            </p>
           </div>
+          <div className="profile-edition-mark">Easy View</div>
         </header>
 
-        <section className="profile-header-card fade-in-up" style={{ animationDelay: '0.1s' }}>
-          <div className="profile-avatar-large">
-            {profile?.avatarUrl ? (
-              <img src={profile.avatarUrl} alt="Avatar" />
-            ) : (
-              <div className="avatar-placeholder">
-                {profile?.name ? profile.name[0] : "S"}
+        <section className="profile-hero-spread fade-in-up" style={{ animationDelay: '0.1s' }}>
+          <div className="profile-hero-copy">
+            <div className="profile-copy-frame">
+              <p className="profile-section-label">Overview</p>
+              <h2 className="profile-name-display">{profileName}</h2>
+              <p className="profile-identity-line">{profileIdentity}</p>
+              <div className="profile-meta-row lookbook-meta-row">
+                <span className="profile-loc">{profileCity}</span>
+                <div className="skin-dot" style={{ backgroundColor: profile?.skinTone || "#f5c5a3" }} />
               </div>
-            )}
-          </div>
-          <div className="profile-main-info">
-            <h2 className="profile-name-title">{profile?.name || "Style Enthusiast"}</h2>
-            <div className="profile-meta-row">
-              <span className="profile-loc">{profile?.city || "Unknown Location"}</span>
-              <div className="skin-dot" style={{ backgroundColor: profile?.skinTone || "#f5c5a3" }} />
+              <div className="profile-overview-grid">
+                {quickSummary.map((item) => (
+                  <div key={item.label} className="profile-overview-item">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="profile-note-panel">
+              <p className="profile-note-kicker">What this controls</p>
+              <p className="profile-note-copy">
+                These settings shape your avatar, improve fit accuracy, and help Cartieré give better wardrobe recommendations.
+              </p>
+            </div>
+
+            <div className="profile-action-row">
+              <button onClick={() => navigate('/onboarding')} className="edit-prof-btn">Edit Profile</button>
+              <button onClick={() => navigate('/generate-model')} className="premium-button-secondary profile-secondary-action">Regenerate Avatar</button>
             </div>
           </div>
-          <div className="profile-actions-header">
-            <button onClick={() => navigate('/onboarding')} className="edit-prof-btn">Edit</button>
+
+          <div className="profile-portrait-frame">
+            <div className="profile-portrait-card">
+              {profile?.avatarUrl ? (
+                <img src={profile.avatarUrl} alt="Avatar" className="profile-portrait-image" />
+              ) : (
+                <div className="avatar-placeholder lookbook-avatar-placeholder">
+                  {profileInitial}
+                </div>
+              )}
+            </div>
+            <div className="profile-caption-strip">
+              <span>Avatar Preview</span>
+              <span>{profile?.targetAesthetic || "Profile Saved"}</span>
+            </div>
           </div>
         </section>
 
-        <section className="stats-grid-section fade-in-up" style={{ animationDelay: '0.2s' }}>
-          <h3 className="section-subtitle-premium">Physical Profile</h3>
-          <div className="stats-row-wardrobe">
+        <section className="profile-stat-spread fade-in-up" style={{ animationDelay: '0.2s' }}>
+          <div className="profile-section-heading">
+            <div>
+              <p className="profile-section-label">Body Details</p>
+              <h3 className="section-subtitle-premium">Measurements and identifiers</h3>
+            </div>
+          </div>
+          <div className="profile-stat-grid">
             {stats.map((stat, i) => (
-              <div key={i} className="stat-card-mini">
+              <article key={i} className="stat-card-mini profile-stat-card">
                 <span className="stat-lbl">{stat.label}</span>
-                <span className="stat-val" style={{ fontSize: '24px' }}>{stat.value}</span>
-              </div>
+                <span className="stat-val profile-stat-value">{stat.value}</span>
+              </article>
             ))}
           </div>
         </section>
 
-        <section className="appearance-card-premium fade-in-up" style={{ animationDelay: '0.3s' }}>
-           <h3 className="section-subtitle-premium">Personal Palette</h3>
-           <div className="palette-info-row">
-             <div className="palette-block" style={{ backgroundColor: profile?.skinTone || "#f5c5a3" }} />
-             <div className="palette-text">
-               <p>Your AI recommendations are fine-tuned for your signature skin tone (<span className="skin-hex">{profile?.skinTone || "#f5c5a3"}</span>).</p>
-             </div>
-           </div>
+        <section className="profile-editorial-grid fade-in-up" style={{ animationDelay: '0.3s' }}>
+          <article className="appearance-card-premium profile-editorial-card">
+            <p className="profile-section-label">Skin Tone</p>
+            <h3 className="section-subtitle-premium">Saved colour reference</h3>
+            <div className="palette-info-row lookbook-palette-row">
+              <div className="palette-block" style={{ backgroundColor: profile?.skinTone || "#f5c5a3" }} />
+              <div className="palette-text">
+                <p>This tone is used to tune your try-ons and improve outfit recommendation accuracy.</p>
+                <span className="skin-hex">{profile?.skinTone || "#f5c5a3"}</span>
+              </div>
+            </div>
+          </article>
+
+          <article className="profile-editorial-card profile-summary-card">
+            <p className="profile-section-label">Style Summary</p>
+            <h3 className="section-subtitle-premium">What Cartieré knows</h3>
+            <div className="profile-summary-list">
+              <div>
+                <span>Gender</span>
+                <strong>{profile?.gender || "—"}</strong>
+              </div>
+              <div>
+                <span>Body Type</span>
+                <strong>{profile?.bodyType || "—"}</strong>
+              </div>
+              <div>
+                <span>Face Shape</span>
+                <strong>{profile?.faceShape || "—"}</strong>
+              </div>
+              <div>
+                <span>Target Aesthetic</span>
+                <strong>{profile?.targetAesthetic || "Not set"}</strong>
+              </div>
+            </div>
+          </article>
         </section>
 
-        <section className="account-danger-zone fade-in-up" style={{ animationDelay: '0.4s' }}>
-          <button onClick={() => navigate('/generate-model')} className="premium-button-secondary" style={{ width: '100%', marginBottom: '16px' }}>Regenerate AI Avatar</button>
-          <button onClick={handleSignOut} className="sign-out-btn-premium">Sign Out of StyleMate</button>
+        <section className="account-danger-zone fade-in-up profile-actions-footer" style={{ animationDelay: '0.4s' }}>
+          <button onClick={handleSignOut} className="sign-out-btn-premium">Sign Out of Cartieré</button>
         </section>
 
         <footer className="profile-footer-info">
-          <p>StyleMate Luxury AI · Version 1.2.0</p>
+          <p>Cartieré Luxury AI · Version 1.2.0</p>
         </footer>
       </div>
     </MainLayout>

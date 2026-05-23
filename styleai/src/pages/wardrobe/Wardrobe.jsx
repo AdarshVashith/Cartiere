@@ -483,7 +483,7 @@ export default function Wardrobe() {
                 <p className="wear-cycle-kicker">Discover Readiness</p>
                 <h3 className="wear-cycle-title">Unlock smarter recommendations</h3>
                 <p className="wear-cycle-summary dr-desktop-only">
-                  Confirm when this is your full wardrobe and add your lifestyle interests so Discover only activates once StyleMate has the right context.
+                  Confirm when this is your full wardrobe and add your lifestyle interests so Discover only activates once Cartieré has the right context.
                 </p>
               </div>
               <span className="dr-toggle-icon">

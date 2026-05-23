@@ -43,9 +43,9 @@
 
   /* Utils */
   --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-2xl: 32px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-2xl: 8px;
   --radius-full: 9999px;
 
   /* Transitions */
@@ -2131,6 +2131,60 @@ button:focus-visible {
 .close-modal:hover {
   background: #eeeeee;
   transform: rotate(90deg);
+}
+
+/* Button consistency: every button uses 8px corners site-wide. */
+button,
+.btn-ghost,
+.btn-filled,
+.btn-primary,
+.btn-secondary,
+.premium-button-primary,
+.premium-button-secondary,
+.auth-toggle-pill,
+.auth-toggle-btn,
+.auth-submit-btn,
+.google-btn,
+.discover-subnav-pill,
+.filter-pill,
+.filter-pill-vertical,
+.btn-primary-luxe,
+.btn-secondary-luxe,
+.btn-generate-luxe,
+.btn-shop,
+.btn-vto,
+.btn-try,
+.btn-worn,
+.btn-freeze,
+.edit-prof-btn,
+.sign-out-btn-premium,
+.save-look-btn {
+  border-radius: 8px !important;
+}
+
+/* Card consistency: every rectangular card uses the same 8px radius. */
+.hero-panel,
+.card,
+.premium-card,
+.result-card,
+.summary-card,
+.architect-suggestion-card,
+.onboarding-note-card,
+.onboarding-preview-card,
+.onboarding-floating-card,
+.onboarding-stage-card,
+.onboarding-metric-card,
+.onboarding-guide-card,
+.funky-result-card,
+.discover-gate-card,
+.discover-budget-bar,
+.profile-header-card,
+.appearance-card-premium,
+.stats-grid-section,
+.discover-readiness-panel,
+.cloth-card-premium,
+.stat-card-mini {
+  border-radius: 8px !important;
 }
 
 @media (max-width: 768px) {
