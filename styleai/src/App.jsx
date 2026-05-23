@@ -14,6 +14,7 @@ import Wishlist from "./pages/Wishlist";
 import Landing from "./pages/Landing";
 import ImageArchitect from "./pages/ImageArchitect";
 import { warnFirestorePermission } from "./firebase/firestoreErrors";
+import { getUserNextRoute, hasCompletedOnboarding, isOnboardingRoute } from "./utils/authFlow";
 
 function ProtectedRoute({ children }) {
   const [user, setUser] = useState(null);
@@ -28,15 +29,15 @@ function ProtectedRoute({ children }) {
         const { db } = await import('./firebase/firebase');
         try {
           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          const isAllowedPath = location.pathname.includes('/onboarding') || location.pathname.includes('/generate-model');
-          
-          if (!userDoc.exists() || !userDoc.data().avatarUrl) {
-            if (!isAllowedPath) {
-              console.log('Incomplete profile, redirecting to onboarding');
-              navigate("/onboarding", { replace: true });
+          const userData = userDoc.exists() ? userDoc.data() : null;
+          const nextRoute = getUserNextRoute(userData);
+          const viewingOnboarding = isOnboardingRoute(location.pathname);
+
+          if (!hasCompletedOnboarding(userData)) {
+            if (!viewingOnboarding && location.pathname !== nextRoute) {
+              navigate(nextRoute, { replace: true });
             }
-          } else if (isAllowedPath) {
-            // If they have an avatar, don't let them go back to onboarding
+          } else if (viewingOnboarding && location.pathname !== "/home") {
             navigate("/home", { replace: true });
           }
         } catch (err) {
@@ -63,12 +64,81 @@ function ProtectedRoute({ children }) {
   return user ? children : null;
 }
 
+function PublicRoute({ children, allowAuthenticated = false }) {
+  const [loading, setLoading] = useState(true);
+  const [canView, setCanView] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setCanView(true);
+        setLoading(false);
+        return;
+      }
+
+      if (allowAuthenticated) {
+        setCanView(true);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { getDoc, doc } = await import("firebase/firestore");
+        const { db } = await import("./firebase/firebase");
+        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+        const userData = userDoc.exists() ? userDoc.data() : null;
+        navigate(getUserNextRoute(userData), { replace: true });
+      } catch (err) {
+        warnFirestorePermission("Public route auth check error:", err);
+        navigate("/onboarding", { replace: true });
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <div className="premium-loader" />
+        <p className="premium-subtitle" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Authenticating</p>
+      </div>
+    );
+  }
+
+  return canView ? children : null;
+}
+
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/login" element={<AuthPage />} />
-      <Route path="/auth" element={<AuthPage />} />
+      <Route
+        path="/"
+        element={
+          <PublicRoute allowAuthenticated>
+            <Landing />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/login"
+        element={
+          <PublicRoute>
+            <AuthPage />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/auth"
+        element={
+          <PublicRoute>
+            <AuthPage />
+          </PublicRoute>
+        }
+      />
       <Route
         path="/onboarding"
         element={

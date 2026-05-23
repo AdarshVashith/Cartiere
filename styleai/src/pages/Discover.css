@@ -24,9 +24,9 @@
   margin-top: 22px;
   padding: 22px 24px;
   border-radius: 28px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250,246,247,0.98));
-  border: 1px solid rgba(120, 72, 84, 0.08);
-  box-shadow: 0 18px 36px rgba(49, 28, 35, 0.05);
+  background: linear-gradient(180deg, rgba(255,255,255,0.99), rgba(248,248,248,0.99));
+  border: 1px solid rgba(20, 20, 20, 0.08);
+  box-shadow: 0 18px 36px rgba(20, 20, 20, 0.05);
 }
 
 .discover-budget-header {
@@ -81,7 +81,7 @@
 }
 
 .discover-subnav-pill {
-  border: 1px solid rgba(120, 72, 84, 0.14);
+  border: 1px solid rgba(20, 20, 20, 0.12);
   background: rgba(255,255,255,0.92);
   color: var(--text-secondary);
   border-radius: 999px;
@@ -101,9 +101,9 @@
   margin-top: 16px;
   padding: 28px;
   border-radius: 28px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(247,241,243,0.98));
-  border: 1px solid rgba(120, 72, 84, 0.12);
-  box-shadow: 0 20px 40px rgba(49, 28, 35, 0.06);
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(249,249,249,0.98));
+  border: 1px solid rgba(20, 20, 20, 0.1);
+  box-shadow: 0 20px 40px rgba(20, 20, 20, 0.06);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -121,7 +121,7 @@
 .discover-context-strip span {
   padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(120, 72, 84, 0.08);
+  background: rgba(228, 71, 53, 0.08);
   color: var(--mauve);
   font-size: 12px;
   font-weight: 700;
@@ -160,10 +160,10 @@
 
 .discover-card {
   background: white;
-  border-radius: 24px;
+  border-radius: 20px;
   border: 1px solid var(--border);
   overflow: hidden;
-  transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+  transition: transform 0.32s ease, box-shadow 0.32s ease, border-color 0.32s ease;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -171,9 +171,9 @@
 }
 
 .discover-card:hover {
-  transform: translateY(-10px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
-  border-color: var(--mauve-soft);
+  transform: translateY(-10px) scale(1.01);
+  box-shadow: 0 28px 52px rgba(20, 20, 20, 0.12);
+  border-color: rgba(228, 71, 53, 0.22);
 }
 
 .discover-img-wrap {
@@ -191,7 +191,7 @@
 }
 
 .discover-card:hover .discover-img-wrap img {
-  transform: scale(1.1);
+  transform: scale(1.08);
 }
 
 .match-badge {
@@ -201,13 +201,13 @@
   padding: 6px 14px;
   background: var(--mauve);
   color: white;
-  border-radius: 12px;
+  border-radius: 999px;
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   z-index: 10;
-  box-shadow: 0 4px 12px rgba(120, 72, 84, 0.3);
+  box-shadow: 0 12px 20px rgba(228, 71, 53, 0.22);
 }
 
 .wishlist-btn {
@@ -224,7 +224,7 @@
   justify-content: center;
   cursor: pointer;
   z-index: 10;
-  transition: all 0.3s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, color 0.25s ease;
   color: var(--mauve);
   font-size: 18px;
 }
@@ -232,7 +232,7 @@
 .wishlist-btn:hover {
   background: white;
   transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 12px 20px rgba(20,20,20,0.12);
 }
 
 .discover-info {
@@ -243,12 +243,13 @@
 }
 
 .item-name {
-  font-family: var(--font-editorial);
+  font-family: var(--font-heading);
   font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 8px;
-  line-height: 1.2;
+  line-height: 1.08;
+  text-transform: uppercase;
 }
 
 .item-reason {
@@ -294,10 +295,17 @@
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(120, 72, 84, 0.12);
+  border-radius: 999px;
+  border: 1px solid rgba(20, 20, 20, 0.1);
   background: rgba(255,255,255,0.94);
   text-decoration: none;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.discover-store-chip:hover {
+  transform: translateY(-2px);
+  border-color: rgba(228, 71, 53, 0.24);
+  box-shadow: 0 14px 24px rgba(20, 20, 20, 0.08);
 }
 
 .discover-store-chip-name {

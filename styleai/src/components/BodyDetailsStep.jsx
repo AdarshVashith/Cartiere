@@ -58,16 +58,27 @@ function BodyDetailsStep({ user, onComplete }) {
   };
 
   return (
-    <section className="bg-white rounded-[40px] shadow-sm border border-[#784854]/05 p-12 max-w-4xl mx-auto fade-in-up">
-      <header className="text-center mb-10">
-        <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-[#784854]/60 mb-3">Final Calibration</p>
-        <h2 className="text-4xl font-['Cormorant_Garamond'] font-bold text-[#1A1A1A] mb-4">Personal Metrics</h2>
-        <p className="text-[#666] text-lg font-light max-w-lg mx-auto">
-          Our AI uses these details to fine-tune recommendations based on your local climate and lifestyle requirements.
+    <section className="card onboarding-stage-card fade-in-up">
+      <header className="onboarding-stage-header">
+        <p className="onboarding-stage-kicker">Final Calibration</p>
+        <h2 className="onboarding-stage-title">Personal Metrics</h2>
+        <p className="onboarding-stage-copy">
+          Add the final numbers and lifestyle context that make your style suggestions and wardrobe planning feel personal.
         </p>
       </header>
 
-      <form className="grid grid-cols-2 gap-6" onSubmit={handleSubmit}>
+      <div className="onboarding-metrics-banner">
+        <article>
+          <span>Fit-aware</span>
+          <p>Height, weight, and body type sharpen outfit proportions.</p>
+        </article>
+        <article>
+          <span>Climate-aware</span>
+          <p>City and work context help generate more wearable looks.</p>
+        </article>
+      </div>
+
+      <form className="onboarding-form-grid" onSubmit={handleSubmit}>
         <div className="form-field">
           <label>Full Name</label>
           <input name="name" placeholder="e.g. Taylor Smith" value={formData.name} onChange={handleChange} required />
@@ -113,12 +124,12 @@ function BodyDetailsStep({ user, onComplete }) {
           <input name="job" placeholder="e.g. Designer" value={formData.job} onChange={handleChange} required />
         </div>
 
-        <button type="submit" className="premium-button-primary col-span-2 py-5 rounded-2xl bg-[#1A1A1A] text-white font-bold hover:bg-[#784854] transition-all shadow-xl hover:shadow-[#784854]/20 mt-4" disabled={saving}>
+        <button type="submit" className="premium-button-primary onboarding-submit-button onboarding-span-2" disabled={saving}>
           {saving ? "Finalizing Profile..." : "Complete Enrollment"}
         </button>
       </form>
 
-      {status && <p className="text-center text-sm font-medium text-[#784854]/60 mt-4">{status}</p>}
+      {status && <p className="status-text onboarding-status-text">{status}</p>}
     </section>
   );
 }

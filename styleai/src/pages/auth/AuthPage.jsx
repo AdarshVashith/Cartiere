@@ -4,7 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import AuthCard from "../../components/AuthCard";
 import { auth, db } from "../../firebase/firebase";
-import { isFirestorePermissionDenied, warnFirestorePermission } from "../../firebase/firestoreErrors";
+import { warnFirestorePermission } from "../../firebase/firestoreErrors";
+import { getUserNextRoute } from "../../utils/authFlow";
 import "./AuthPage.css";
 
 function AuthPage() {
@@ -16,17 +17,11 @@ function AuthPage() {
     
     try {
       const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        if (userData.avatarUrl) {
-          navigate("/home", { replace: true });
-          return;
-        }
-      }
-      navigate("/onboarding", { replace: true });
+      const userData = userDoc.exists() ? userDoc.data() : null;
+      navigate(getUserNextRoute(userData), { replace: true });
     } catch (error) {
       warnFirestorePermission("Error checking user profile:", error);
-      navigate(isFirestorePermissionDenied(error) ? "/home" : "/onboarding", { replace: true });
+      navigate("/onboarding", { replace: true });
     }
   };
 
@@ -130,7 +125,11 @@ function AuthPage() {
               { x: 80, d: "3s" }, { x: 140, d: "4s" }, { x: 200, d: "3.5s" }, 
               { x: 260, d: "4.5s" }, { x: 320, d: "3.2s" } 
             ].map((item, i) => (
-              <g key={i} style={{ animation: `clothSway ${item.d} ease-in-out infinite`, transformOrigin: `${item.x}px 20px` }}>
+              <g
+                key={i}
+                className="auth-rack-cloth"
+                style={{ animationDuration: item.d, transformOrigin: `${item.x}px 20px` }}
+              >
                 <line x1={item.x} y1="20" x2={item.x} y2="50" stroke="rgba(255,250,242,0.3)" strokeWidth="1.5" />
                 <rect x={item.x - 20} y="50" width="40" height="70" rx="4" fill="rgba(255,250,242,0.12)" stroke="rgba(255,250,242,0.25)" strokeWidth="1.5" />
               </g>
@@ -146,13 +145,6 @@ function AuthPage() {
       <div className="auth-right">
         <AuthCard onAuthenticated={handleRedirect} />
       </div>
-
-      <style>{`
-        @keyframes clothSway {
-          0%, 100% { transform: rotate(-3deg); }
-          50% { transform: rotate(3deg); }
-        }
-      `}</style>
     </div>
   );
 }

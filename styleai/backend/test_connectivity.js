@@ -6,11 +6,10 @@ async function testConnectivity() {
   const apiKey = process.env.GEMINI_API_KEY;
   const genAI = new GoogleGenerativeAI(apiKey);
   
-  // Trying with the "models/" prefix just in case
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+  const model = genAI.getGenerativeModel({ model: process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash" });
 
   try {
-    console.log("Sending simple text prompt to gemini-1.5-flash-latest...");
+    console.log("Sending simple text prompt to the configured Gemini text model...");
     const result = await model.generateContent("Hello?");
     console.log("Response:", result.response.text());
     console.log("✅ API Connectivity Verified!");

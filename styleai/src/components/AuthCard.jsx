@@ -54,6 +54,11 @@ function AuthCard({ onAuthenticated }) {
     return colors[strength.score];
   };
 
+  useEffect(() => {
+    setError("");
+    setShowPassword(false);
+  }, [mode]);
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
@@ -113,8 +118,8 @@ function AuthCard({ onAuthenticated }) {
       </h1>
       <p className="auth-subtext">
         {mode === "signup" 
-          ? "Join the luxury fashion revolution powered by AI." 
-          : "Access your personalized AI stylist and wardrobe."}
+          ? "Build your AI-powered wardrobe profile and unlock sharper outfit suggestions." 
+          : "Log in to continue with your personal style dashboard and saved wardrobe."}
       </p>
 
       <div className="auth-toggle-pill">
@@ -161,7 +166,7 @@ function AuthCard({ onAuthenticated }) {
 
         <div className="form-field">
           <label>Password</label>
-          <div style={{ position: 'relative' }}>
+          <div className="password-field-wrap">
             <input 
               name="password"
               type={showPassword ? "text" : "password"} 
@@ -170,23 +175,34 @@ function AuthCard({ onAuthenticated }) {
               onChange={handleChange}
               minLength={6}
               required
-              style={{ paddingRight: '50px' }}
+              className="password-input"
             />
             <button 
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              style={{ 
-                position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)',
-                background: 'none', border: 'none', color: 'var(--mauve)', fontWeight: '700', fontSize: '10px',
-                cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.1em'
-              }}
+              className="password-toggle-btn"
             >
               {showPassword ? "Hide" : "Show"}
             </button>
           </div>
         </div>
 
-        {error && <p className="error-text-premium" style={{ color: '#e74c3c', fontSize: '12px', marginBottom: '16px' }}>{error}</p>}
+        {mode === "signup" && strength.score > 0 && (
+          <div className="password-strength">
+            <div className="password-strength-bars" aria-hidden="true">
+              {[1, 2, 3, 4].map((level) => (
+                <span
+                  key={level}
+                  className={`password-strength-bar ${strength.score >= level ? "active" : ""}`}
+                  style={{ backgroundColor: strength.score >= level ? getStrengthColor() : undefined }}
+                />
+              ))}
+            </div>
+            <span className="password-strength-label">{strength.label} password</span>
+          </div>
+        )}
+
+        {error && <p className="error-text-premium">{error}</p>}
 
         <button type="submit" className="auth-submit-btn" disabled={loading}>
           {loading ? "Authenticating..." : (mode === "signup" ? "Create Account" : "Sign In")}

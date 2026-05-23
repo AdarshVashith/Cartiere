@@ -1,0 +1,20 @@
+{
+  "occasion": "party",
+  "timeOfDay": "evening",
+  "destination": "city",
+  "vibe": "fun",
+  "weather": { "temp": 25, "description": "clear" },
+  "profile": {
+    "gender": "female",
+    "age": 28,
+    "bodyType": "slim",
+    "skinTone": "warm",
+    "job": "designer",
+    "city": "Bangalore",
+    "styleInterests": ["modern", "vintage"],
+    "lifestyleNeeds": ["work", "party"]
+  },
+  "wardrobe": [
+    { "id": "1", "name": "Blue T-Shirt", "category": "Shirt", "color": "blue", "imageUrl": "" }
+  ]
+}

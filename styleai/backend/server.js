@@ -25,8 +25,6 @@ console.log('.env file path:', path.resolve('.env'))
 console.log('Keys loaded:')
 console.log('SERPAPI_KEY:', process.env.SERPAPI_KEY ? 'SET' : 'MISSING')
 console.log('REMOVEBG_API_KEY:', process.env.REMOVEBG_API_KEY ? 'SET' : 'MISSING')
-console.log('REPLICATE_API_KEY:', process.env.REPLICATE_API_KEY ? 'SET' : 'MISSING')
-console.log('GROQ_API_KEY:', process.env.GROQ_API_KEY ? 'SET' : 'MISSING')
 console.log('GEMINI_API_KEY:', process.env.GEMINI_API_KEY ? 'SET' : 'MISSING')
 
 const app = express()
@@ -34,6 +32,8 @@ const configuredFrontendUrls = [
   process.env.FRONTEND_URL,
   process.env.VITE_FRONTEND_URL
 ].filter(Boolean)
+const GEMINI_TEXT_MODEL =
+  process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash'
 const GEMINI_IMAGE_MODEL =
   process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image'
 const GEMINI_IMAGE_FALLBACK_MODEL =
@@ -125,37 +125,6 @@ app.get('/', (req, res) => {
   })
 })
 
-async function waitForReplicatePrediction(predictionId) {
-  let attempts = 0
-
-  while (attempts < 60) {
-    const pollRes = await fetch(
-      `https://api.replicate.com/v1/predictions/${predictionId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.REPLICATE_API_KEY}`
-        }
-      }
-    )
-
-    if (!pollRes.ok) {
-      const errData = await pollRes.json()
-      throw new Error(errData.detail || errData.error || JSON.stringify(errData))
-    }
-
-    const result = await pollRes.json()
-    console.log(`Poll ${attempts + 1}: ${result.status}`)
-
-    if (result.status === 'succeeded' || result.status === 'failed') {
-      return result
-    }
-
-    attempts += 1
-    await new Promise(resolve => setTimeout(resolve, 3000))
-  }
-
-  throw new Error('Replicate prediction timed out')
-}
 
 /**
  * Helper to download an image URL into a Blob
@@ -166,77 +135,106 @@ async function urlToBlob(url) {
   return response.blob();
 }
 
-async function createGroqJsonResponse({ systemPrompt, userPrompt, maxTokens = 1000 }) {
-  if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY === 'your_key_here') {
-    throw new Error('GROQ_API_KEY missing or not configured')
+
+async function createGeminiJsonResponse({ systemPrompt, userPrompt, maxTokens = 8192 }) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY missing or not configured')
   }
 
-  const makeGroqRequest = async (useJsonMode) => {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        max_tokens: maxTokens,
-        temperature: 0.2,
-        ...(useJsonMode ? { response_format: { type: 'json_object' } } : {}),
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ]
-      })
-    })
+  // Use the configured text model for JSON text tasks
+  const jsonModel = GEMINI_TEXT_MODEL
 
-    const data = await response.json()
-    return { response, data }
+  const tryRepairJson = (text) => {
+    let repaired = text.trim()
+    
+    let inString = false
+    let escaped = false
+    for (let i = 0; i < repaired.length; i++) {
+      const ch = repaired[i]
+      if (escaped) { escaped = false; continue }
+      if (ch === '\\') { escaped = true; continue }
+      if (ch === '"') { inString = !inString }
+    }
+    if (inString) {
+      repaired += '"'
+    }
+
+    const openBraces = (repaired.match(/{/g) || []).length
+    const closeBraces = (repaired.match(/}/g) || []).length
+    const openBrackets = (repaired.match(/\[/g) || []).length
+    const closeBrackets = (repaired.match(/]/g) || []).length
+
+    repaired = repaired.replace(/,\s*$/, '')
+
+    for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']'
+    for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}'
+
+    return repaired
   }
 
   const extractJsonObject = (text) => {
     try {
       return JSON.parse(text)
-    } catch (error) {
+    } catch (e1) {
       const start = text.indexOf('{')
       const end = text.lastIndexOf('}')
-      if (start === -1 || end === -1 || end <= start) {
-        throw error
+      if (start !== -1 && end !== -1 && end > start) {
+        try {
+          return JSON.parse(text.slice(start, end + 1))
+        } catch (e2) {
+          try {
+            const repaired = tryRepairJson(text.slice(start))
+            console.warn('Repaired truncated Gemini JSON')
+            return JSON.parse(repaired)
+          } catch (e3) {
+            throw e1
+          }
+        }
       }
-
-      const candidate = text.slice(start, end + 1)
-      return JSON.parse(candidate)
+      try {
+        const repaired = tryRepairJson(text)
+        console.warn('Repaired truncated Gemini JSON (full text)')
+        return JSON.parse(repaired)
+      } catch (e4) {
+        throw e1
+      }
     }
   }
 
-  let { response, data } = await makeGroqRequest(true)
+  console.log(`Calling Gemini model: ${jsonModel} with maxOutputTokens: ${maxTokens}`)
 
-  if (!response.ok) {
-    const groqError = data?.error?.message || 'Groq request failed'
-    const shouldRetryWithoutJsonMode =
-      groqError.toLowerCase().includes('failed to generate json') ||
-      groqError.toLowerCase().includes('failed_generation')
-
-    if (shouldRetryWithoutJsonMode) {
-      console.warn('Groq JSON mode failed, retrying without strict JSON mode')
-      const retry = await makeGroqRequest(false)
-      response = retry.response
-      data = retry.data
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${jsonModel}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
+        }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: maxTokens,
+          responseMimeType: 'application/json'
+        }
+      })
     }
-  }
+  )
 
+  const data = await response.json()
   if (!response.ok) {
-    throw new Error(data?.error?.message || 'Groq request failed')
+    throw new Error(data?.error?.message || `Gemini API error: ${response.status}`)
   }
 
-  const responseText = data?.choices?.[0]?.message?.content
-  if (!responseText) {
-    throw new Error('Groq returned an empty response')
+  const rawText = extractGeminiTextPayload(data)
+  console.log('Gemini raw text (first 500 chars):', rawText.substring(0, 500))
+  if (!rawText || rawText === '{}') {
+    throw new Error('Gemini returned an empty response')
   }
 
   return {
-    rawText: responseText,
-    parsed: extractJsonObject(responseText)
+    rawText,
+    parsed: extractJsonObject(rawText)
   }
 }
 
@@ -281,6 +279,17 @@ function extractGeminiTextPayload(geminiData) {
     }
   }
   return '{}'
+}
+
+function isGeminiQuotaErrorMessage(message = '') {
+  return /quota|rate.?limit|429|too many requests|resource_exhausted/i.test(String(message))
+}
+
+function getGeminiClientErrorMessage(errorMessage, fallbackMessage) {
+  if (isGeminiQuotaErrorMessage(errorMessage)) {
+    return 'This Gemini image feature is temporarily unavailable right now. Please try again a little later.'
+  }
+  return fallbackMessage
 }
 
 function parseJsonFromText(rawText) {
@@ -362,88 +371,6 @@ function extractPriceAmount(priceValue) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-// ENDPOINT 1 — Generate avatar with Replicate Flux
-app.post('/api/generate-avatar', async (req, res) => {
-  try {
-    const { facePhotoUrl, gender, bodyType, height, age } = req.body
-
-    console.log('=== Generate Avatar ===')
-    console.log({ gender, bodyType, height, age, facePhotoUrl })
-
-    if (!facePhotoUrl) {
-      throw new Error('No face photo URL provided')
-    }
-
-    const prompt = `Full body photo of this exact person,
-      ${gender}, ${bodyType} body build,
-      ${height}cm tall, ${age} years old,
-      standing straight facing forward,
-      hands relaxed at sides,
-      wearing casual modern outfit,
-      plain white background,
-      fashion lookbook photography,
-      full body visible from head to toe,
-      high quality sharp professional photo,
-      studio lighting`
-
-    const startResponse = await fetch(
-      'https://api.replicate.com/v1/models/black-forest-labs/flux-kontext-pro/predictions',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.REPLICATE_API_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'wait'
-        },
-        body: JSON.stringify({
-          input: {
-            prompt: prompt,
-            input_image: facePhotoUrl,
-            output_format: 'jpg',
-            output_quality: 90,
-            safety_tolerance: 2,
-            prompt_upsampling: true
-          }
-        })
-      }
-    )
-
-    if (!startResponse.ok) {
-      const errData = await startResponse.json()
-      throw new Error(errData.detail || errData.error || JSON.stringify(errData))
-    }
-
-    let result = await startResponse.json()
-    console.log('Prediction ID:', result.id)
-
-    if (result.status !== 'succeeded' && result.status !== 'failed') {
-      result = await waitForReplicatePrediction(result.id)
-    }
-
-    if (result.status === 'failed') {
-      throw new Error('Generation failed: ' + (result.error || 'Unknown'))
-    }
-
-    if (!result.output) {
-      throw new Error('No output received')
-    }
-
-    const imageUrl = Array.isArray(result.output)
-      ? result.output[0]
-      : result.output
-
-    const imgRes = await fetch(imageUrl)
-    const imgBuffer = await imgRes.arrayBuffer()
-    const base64 = Buffer.from(imgBuffer).toString('base64')
-
-    console.log('=== Avatar Generated Successfully ===')
-    res.json({ success: true, base64, url: imageUrl })
-
-  } catch (err) {
-    console.error('Avatar error:', err.message)
-    res.status(500).json({ error: err.message })
-  }
-})
 
 // ENDPOINT 1.5 — Secure Gemini Avatar Generation
 app.post('/api/generate-avatar-gemini', async (req, res) => {
@@ -463,7 +390,7 @@ app.post('/api/generate-avatar-gemini', async (req, res) => {
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -495,7 +422,12 @@ app.post('/api/generate-avatar-gemini', async (req, res) => {
     res.json({ success: true, data })
   } catch (err) {
     console.error('Gemini secure avatar error:', err.message)
-    res.status(500).json({ error: err.message })
+    res.status(isGeminiQuotaErrorMessage(err.message) ? 503 : 500).json({
+      error: getGeminiClientErrorMessage(
+        err.message,
+        'Avatar generation is unavailable right now.'
+      )
+    })
   }
 })
 
@@ -514,7 +446,7 @@ app.post('/api/try-on-gemini', async (req, res) => {
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -542,7 +474,12 @@ app.post('/api/try-on-gemini', async (req, res) => {
     res.json({ success: true, data })
   } catch (err) {
     console.error('Gemini secure VTO error:', err.message)
-    res.status(500).json({ error: err.message })
+    res.status(isGeminiQuotaErrorMessage(err.message) ? 503 : 500).json({
+      error: getGeminiClientErrorMessage(
+        err.message,
+        'Virtual try-on is unavailable right now.'
+      )
+    })
   }
 })
 
@@ -561,7 +498,7 @@ app.post('/api/generate-garment-gemini', async (req, res) => {
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -587,39 +524,15 @@ app.post('/api/generate-garment-gemini', async (req, res) => {
     res.json({ success: true, data })
   } catch (err) {
     console.error('Gemini secure garment error:', err.message)
-    res.status(500).json({ error: err.message })
-  }
-})
-
-// ENDPOINT 2 — Virtual try-on with Hugging Face Inference
-app.post('/api/try-on', async (req, res) => {
-  try {
-    const { avatarUrl, clothImageUrl, category } = req.body
-
-    console.log('=== Virtual Try-On (Hugging Face) ===')
-    if (!avatarUrl || !clothImageUrl) {
-      throw new Error('Missing avatarUrl or clothImageUrl')
-    }
-
-    // Determine if it's a top or bottom
-    const isBottom = ['Bottom', 'Pants', 'Skirt', 'Shorts', 'Pants (Jeans)'].includes(category);
-    
-    const resultImage = await runVTOPipeline(
-      avatarUrl,
-      isBottom ? null : clothImageUrl,
-      isBottom ? clothImageUrl : null
-    );
-
-    res.json({
-      success: true,
-      imageUrl: resultImage,
-      provider: 'gemini'
+    res.status(isGeminiQuotaErrorMessage(err.message) ? 503 : 500).json({
+      error: getGeminiClientErrorMessage(
+        err.message,
+        'Garment generation is unavailable right now.'
+      )
     })
-  } catch (err) {
-    console.error('Try-on error details:', err)
-    res.status(500).json({ success: false, error: err.message, provider: 'gemini' })
   }
 })
+
 
 // ENDPOINT 2B — Full outfit preview with Hugging Face VTO pipeline
 app.post('/api/generate-outfit-preview', async (req, res) => {
@@ -630,17 +543,27 @@ app.post('/api/generate-outfit-preview', async (req, res) => {
       throw new Error('Missing avatarUrl or items')
     }
 
-    // Sort items into Top and Bottom categories for the 2-step pipeline
-    // Sort items into Top and Bottom categories (case-insensitive)
-    const topItem = items.find(i => {
-      const cat = (i.category || '').toLowerCase();
-      return ['top', 'jacket', 'dress', 'suit', 'sportswear', 'shirt', 'upperwear'].includes(cat);
-    });
-    
-    const bottomItem = items.find(i => {
-      const cat = (i.category || '').toLowerCase();
-      return ['bottom', 'pants', 'skirt', 'shorts', 'pants (jeans)', 'lowerwear'].includes(cat);
-    });
+    const classifyGarment = (item = {}) => {
+      const haystack = `${item.category || ''} ${item.name || ''}`.toLowerCase()
+      if (/(jean|pant|trouser|skirt|short|legging|cargo|bottom|lowerwear)/.test(haystack)) {
+        return 'bottom'
+      }
+      if (/(dress|gown)/.test(haystack)) {
+        return 'dress'
+      }
+      if (/(top|shirt|tee|t-shirt|blouse|sweater|hoodie|jacket|coat|blazer|upperwear|kurta|suit|sportswear)/.test(haystack)) {
+        return 'top'
+      }
+      return 'unknown'
+    }
+
+    const imageItems = items.filter(item => item?.imageUrl)
+    const topItem = imageItems.find(item => {
+      const garmentType = classifyGarment(item)
+      return garmentType === 'top' || garmentType === 'dress'
+    }) || imageItems[0]
+
+    const bottomItem = imageItems.find(item => classifyGarment(item) === 'bottom') || null
 
     if (!topItem && !bottomItem) {
       throw new Error('No compatible garments (Top or Bottom) found for preview')
@@ -651,7 +574,11 @@ app.post('/api/generate-outfit-preview', async (req, res) => {
     const resultImage = await runVTOPipeline(
       avatarUrl, 
       topItem?.imageUrl || null, 
-      bottomItem?.imageUrl || null
+      bottomItem?.imageUrl || null,
+      {
+        topName: topItem?.name || '',
+        bottomName: bottomItem?.name || ''
+      }
     );
 
     res.json({
@@ -661,9 +588,15 @@ app.post('/api/generate-outfit-preview', async (req, res) => {
     })
   } catch (err) {
     console.error('Outfit preview error details:', err)
-    res.status(500).json({ 
+    const quotaExceeded = err?.code === 'VTO_QUOTA_EXCEEDED' || /quota|rate.?limit|429|too many requests/i.test(String(err?.message || ''))
+    const statusCode = quotaExceeded ? 503 : 500
+    const clientErrorMessage = quotaExceeded
+      ? 'Virtual try-on is temporarily unavailable right now. Please try again in a little while.'
+      : err.message || "Preview service is currently unavailable."
+    res.status(statusCode).json({ 
       success: false, 
-      error: err.message || "Preview service is currently unavailable.",
+      error: clientErrorMessage,
+      reason: quotaExceeded ? 'quota_exceeded' : 'preview_failed',
       provider: 'gemini' 
     })
   }
@@ -742,7 +675,7 @@ Return ONLY valid JSON in exactly this shape:
 }`
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -940,12 +873,13 @@ app.post('/api/remove-bg', async (req, res) => {
   }
 })
 
-// ENDPOINT 5 — Generate Outfit of the Day with Groq
-app.post('/api/generate-outfit', async (req, res) => {
+// ENDPOINT 5 — Generate Outfit of the Day with Gemini
+app.post('/api/generate-outfit', requireAuth, async (req, res) => {
   try {
     const { occasion, timeOfDay, destination, vibe, weather, profile, wardrobe } = req.body
 
     console.log('=== Generate Outfit Recommendation ===')
+    console.log('User:', req.user?.localId || 'unknown')
     console.log({ occasion, timeOfDay, destination, vibe, weather })
 
     const systemPrompt = `You are a professional fashion stylist AI. 
@@ -999,15 +933,15 @@ app.post('/api/generate-outfit', async (req, res) => {
     }
     `
 
-    const groqResponse = await createGroqJsonResponse({
+    const geminiResponse = await createGeminiJsonResponse({
       systemPrompt,
       userPrompt,
-      maxTokens: 800
+      maxTokens: 1024
     })
-    console.log('Groq Raw Response:', groqResponse.rawText)
+    console.log('Gemini Raw Response (outfit):', geminiResponse.rawText)
 
     try {
-      const outfitRecommendation = groqResponse.parsed
+      const outfitRecommendation = geminiResponse.parsed
       
       // Ensure imageUrls are preserved from the original wardrobe
       outfitRecommendation.items = outfitRecommendation.items.map(recItem => {
@@ -1018,9 +952,9 @@ app.post('/api/generate-outfit', async (req, res) => {
         }
       })
 
-      res.json(outfitRecommendation)
+      res.json({ success: true, ...outfitRecommendation })
     } catch (parseError) {
-      console.error('Failed to parse Groq response:', parseError)
+      console.error('Failed to parse Gemini response:', parseError)
       res.status(500).json({ success: false, error: 'AI generated invalid response format' })
     }
 
@@ -1122,18 +1056,18 @@ Respond with ONLY valid JSON. No markdown, no preamble.`
     }
     `
 
-    const groqResponse = await createGroqJsonResponse({
+    const geminiResponse = await createGeminiJsonResponse({
       systemPrompt,
       userPrompt,
-      maxTokens: 1000
+      maxTokens: 2048
     })
-    console.log('Groq Raw Response for Discover:', groqResponse.rawText)
+    console.log('Gemini Raw Response for Discover:', geminiResponse.rawText)
 
     let parsedResponse
     try {
-      parsedResponse = groqResponse.parsed
+      parsedResponse = geminiResponse.parsed
     } catch (parseError) {
-      console.error('Failed to parse Groq response:', parseError)
+      console.error('Failed to parse Gemini response:', parseError)
       return res.status(500).json({ success: false, error: 'AI generated invalid response format' })
     }
 
@@ -1395,7 +1329,7 @@ JSON shape:
 `
 
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1403,12 +1337,12 @@ JSON shape:
           contents: [{
             parts: [
               { text: `${systemPrompt}\n\n${userPrompt}` },
-              { inline_data: { mime_type: mimeType, data: imageBase64 } }
+              { inlineData: { mimeType, data: imageBase64 } }
             ]
           }],
           generationConfig: {
             temperature: 0.3,
-            response_mime_type: 'application/json'
+            responseMimeType: 'application/json'
           }
         })
       }
@@ -1456,8 +1390,10 @@ if (!process.env.VERCEL) {
   const server = app.listen(PORT, () => {
     console.log(`=== Backend running on http://localhost:${PORT} ===`)
     console.log('Endpoints ready:')
-    console.log('  POST /api/generate-avatar')
-    console.log('  POST /api/try-on')
+    console.log('  POST /api/generate-avatar-gemini')
+    console.log('  POST /api/try-on-gemini')
+    console.log('  POST /api/generate-garment-gemini')
+    console.log('  POST /api/generate-outfit-preview')
     console.log('  POST /api/visual-search')
     console.log('  POST /api/remove-bg')
     console.log('  POST /api/generate-outfit')

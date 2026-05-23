@@ -4,17 +4,21 @@ import { auth, db } from '../firebase/firebase';
 import { doc, getDoc, getDocs, collection, updateDoc, addDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import MainLayout from '../components/MainLayout';
+import callBackend from '../utils/apiClient';
 import './GenerateOutfit.css';
 
 const OCCASIONS = ['Casual', 'Work', 'Date Night', 'Party', 'Formal', 'Festival', 'Travel', 'Gym', 'Wedding Guest']
 const TIMES = ['Morning', 'Afternoon', 'Evening', 'Night']
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL && !window.location.hostname.includes('vercel.app')
+  ? import.meta.env.VITE_BACKEND_URL
+  : ''
 
 export default function GenerateOutfit() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState({ name: 'StyleMate', avatarUrl: '', skinTone: 'neutral', city: '' });
+  const [profile, setProfile] = useState({ name: 'StyleMate', avatarUrl: '', skinTone: 'neutral', city: '', gender: '', bodyType: '' });
   const [wardrobe, setWardrobe] = useState([]);
-  const [weatherData, setWeatherData] = useState({ temp: '--', city: '', icon: '' });
+  const [weatherData, setWeatherData] = useState({ temp: '--', city: '', icon: '', description: '' });
   
   const [occasion, setOccasion] = useState('');
   const [timeOfDay, setTimeOfDay] = useState('');
@@ -31,6 +35,14 @@ export default function GenerateOutfit() {
   });
   const [outfitPreviewUrl, setOutfitPreviewUrl] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+
+  const getPreviewErrorMessage = (message = '') => {
+    if (/quota|rate.?limit|429|too many requests/i.test(message)) {
+      return 'Virtual try-on is temporarily unavailable right now. Please try again in a little while.';
+    }
+    return message || 'Virtual try-on preview is unavailable right now.';
+  };
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -46,7 +58,9 @@ export default function GenerateOutfit() {
             name: String(d.name || 'StyleMate'),
             avatarUrl: String(d.avatarUrl || ''),
             skinTone: String(d.skinTone || 'neutral'),
-            city: String(d.city || '')
+            city: String(d.city || ''),
+            gender: String(d.gender || ''),
+            bodyType: String(d.bodyType || '')
           });
           
           if (d.city && import.meta.env.VITE_OPENWEATHER_API_KEY) {
@@ -56,7 +70,8 @@ export default function GenerateOutfit() {
               setWeatherData({
                 temp: String(Math.round(wData.main.temp)),
                 city: String(wData.name),
-                icon: String(wData.weather[0].icon)
+                icon: String(wData.weather[0].icon),
+                description: String(wData.weather[0].description || '')
               });
             }
           }
@@ -83,56 +98,51 @@ export default function GenerateOutfit() {
 
   const handleGenerate = async () => {
     if (!occasion || !timeOfDay) return;
+    setOutfitPreviewUrl(null);
+    setPreviewError('');
     setScreen('generating');
     
     try {
       const activeWardrobe = wardrobe.filter(i => !i.isFrozen);
-      const wardrobeText = activeWardrobe.map(i => `${i.name} (${i.category})`).join(', ');
-      const prompt = `Style Request: ${occasion} look for ${timeOfDay}. 
-      Wardrobe: ${wardrobeText}. 
-      Skin Tone: ${profile.skinTone}. 
-      Weather: ${weatherData.temp}°C. 
-      Vibe: ${vibe}. 
-      Return JSON: { "outfitName": "string", "styleScore": number, "selectedItems": ["string"], "whyThisWorks": "string", "hairTip": "string" }`;
-
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}` 
-        },
-        body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
-          messages: [
-            { role: 'system', content: 'You are a luxury fashion stylist. Respond only with JSON.' },
-            { role: 'user', content: prompt }
-          ],
-          response_format: { type: 'json_object' }
-        })
-      });
-
-      const data = await res.json();
-      const parsed = JSON.parse(data.choices[0].message.content);
       
-      const matched = (parsed.selectedItems || []).map(name => {
-        const found = wardrobe.find(w => w.name.toLowerCase().includes(String(name).toLowerCase()));
-        // Strictly return only primitive fields — no Firestore object fields allowed
-        if (found) {
-          return {
-            name: String(found.name || ''),
-            category: String(found.category || 'Other'),
-            imageUrl: String(found.imageUrl || ''),
-            color: String(found.color || '#000000')
-          };
-        }
-        return { name: String(name), category: 'Stylist Choice', imageUrl: '', color: '#000000' };
-      });
+      const payload = {
+        occasion,
+        timeOfDay,
+        destination: destination || '',
+        vibe: vibe || '',
+        weather: {
+          temp: isNaN(Number(weatherData.temp)) ? 22 : Number(weatherData.temp),
+          description: weatherData.description || 'clear sky'
+        },
+        profile: {
+          gender: profile.gender || '',
+          bodyType: profile.bodyType || '',
+          skinTone: profile.skinTone || 'neutral'
+        },
+        wardrobe: activeWardrobe.map(item => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          color: item.color,
+          imageUrl: item.imageUrl
+        }))
+      };
+
+      const data = await callBackend('/api/generate-outfit', payload);
+      
+      const matched = (data.items || []).map(item => ({
+        id: String(item.id || ''),
+        name: String(item.name || ''),
+        category: String(item.category || 'Other'),
+        imageUrl: String(item.imageUrl || ''),
+        color: String(item.color || '#000000')
+      }));
 
       setResult({
-        outfitName: String(parsed.outfitName || 'Bespoke Look'),
-        styleScore: Number(parsed.styleScore || 85),
-        whyThisWorks: String(parsed.whyThisWorks || ''),
-        hairTip: String(parsed.hairTip || ''),
+        outfitName: String(data.outfitName || 'Bespoke Look'),
+        styleScore: Number(data.styleScore || 85),
+        whyThisWorks: String(data.whyThisWorks || ''),
+        hairTip: String(data.hairTip || ''),
         items: matched
       });
 
@@ -142,7 +152,7 @@ export default function GenerateOutfit() {
       if (profile.avatarUrl) {
         setPreviewLoading(true);
         try {
-          const vtoRes = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/generate-outfit-preview`, {
+          const vtoRes = await fetch(`${BACKEND_URL}/api/generate-outfit-preview`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -152,13 +162,14 @@ export default function GenerateOutfit() {
           });
 
           const vtoData = await vtoRes.json();
-          if (vtoData.success && vtoData.imageUrl) {
+          if (vtoRes.ok && vtoData.success && vtoData.imageUrl) {
             setOutfitPreviewUrl(vtoData.imageUrl);
           } else {
-            throw new Error(vtoData.error || 'VTO failed');
+            throw new Error(getPreviewErrorMessage(vtoData.error));
           }
         } catch (vtoErr) {
           console.warn('Virtual try-on unavailable:', vtoErr.message);
+          setPreviewError(getPreviewErrorMessage(vtoErr.message));
         } finally {
           setPreviewLoading(false);
         }
@@ -201,7 +212,7 @@ export default function GenerateOutfit() {
       if (!user) return;
       
       const updatePromises = result.items.map(async (item) => {
-        const originalItem = wardrobe.find(w => w.name === item.name);
+        const originalItem = wardrobe.find(w => w.id === item.id) || wardrobe.find(w => w.name === item.name);
         if (originalItem && originalItem.id) {
           const docRef = doc(db, 'users', user.uid, 'wardrobe', originalItem.id);
           const docSnap = await getDoc(docRef);
@@ -334,7 +345,25 @@ export default function GenerateOutfit() {
                   ) : outfitPreviewUrl ? (
                     <img src={outfitPreviewUrl} alt="Outfit" className="result-avatar-image" />
                   ) : profile.avatarUrl ? (
-                    <img src={profile.avatarUrl} alt="Your Avatar" className="result-avatar-image" />
+                    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                      <img src={profile.avatarUrl} alt="Your Avatar" className="result-avatar-image" />
+                      {previewError && (
+                        <div style={{
+                          position: 'absolute',
+                          left: '16px',
+                          right: '16px',
+                          bottom: '16px',
+                          padding: '12px 14px',
+                          borderRadius: '14px',
+                          background: 'rgba(255,255,255,0.92)',
+                          border: '1px solid rgba(120, 72, 84, 0.14)',
+                          boxShadow: '0 12px 30px rgba(31, 41, 55, 0.12)'
+                        }}>
+                          <p style={{ margin: 0, fontSize: '10px', letterSpacing: '0.18em', fontWeight: 700, color: 'var(--accent)' }}>PREVIEW UNAVAILABLE</p>
+                          <p style={{ margin: '6px 0 0', fontSize: '12px', lineHeight: 1.5, color: 'var(--text-primary)' }}>{previewError}</p>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', padding: '40px 32px' }}>
                       {/* Top decorative accent */}

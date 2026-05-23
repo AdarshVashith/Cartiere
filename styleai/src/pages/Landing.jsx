@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebase/firebase";
-import { warnFirestorePermission } from "../firebase/firestoreErrors";
 import heroModel from "../assets/hero_model.png";
 import "./Landing.css";
 
@@ -49,6 +45,12 @@ const wardrobeSignals = [
   "Virtual try-on previews",
 ];
 
+const heroMetrics = [
+  { value: "01", label: "Map the closet you actually wear" },
+  { value: "02", label: "Spot gaps before buying more" },
+  { value: "03", label: "Pressure-test looks on your avatar" },
+];
+
 function CapabilityIcon({ type }) {
   if (type === "spark") {
     return (
@@ -83,28 +85,6 @@ const Landing = () => {
   const navigate = useNavigate();
   const canvasRef = useRef(null);
   const [scrolled, setScrolled] = useState(false);
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
-      setUser(nextUser);
-      if (nextUser) {
-        try {
-          const userDoc = await getDoc(doc(db, "users", nextUser.uid));
-          if (userDoc.exists()) {
-            setProfile(userDoc.data());
-          }
-        } catch (err) {
-          setProfile(null);
-          warnFirestorePermission("Error fetching profile on landing:", err);
-        }
-      } else {
-        setProfile(null);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -163,7 +143,6 @@ const Landing = () => {
   }, []);
 
   const handleNav = (path) => navigate(path);
-  const memberName = profile?.name || user?.email?.split("@")[0] || "StyleMate";
 
   return (
     <div className="landing-page">
@@ -177,26 +156,10 @@ const Landing = () => {
 
           <div className="nav-actions-cluster">
             <div className="nav-inline-note">AI wardrobe system for sharper everyday dressing</div>
-            {user ? (
-              <button className="member-chip landing-reset-btn" onClick={() => handleNav("/home")}>
-                <span className="member-chip-text">
-                  <small>Member</small>
-                  <strong>{memberName}</strong>
-                </span>
-                <span className="member-avatar-shell">
-                  {profile?.avatarUrl ? (
-                    <img src={profile.avatarUrl} alt="Avatar" />
-                  ) : (
-                    <span>{memberName[0]?.toUpperCase() || "S"}</span>
-                  )}
-                </span>
-              </button>
-            ) : (
-              <div className="nav-btns">
-                <button className="btn-ghost landing-reset-btn" onClick={() => handleNav("/login")}>Login</button>
-                <button className="btn-filled landing-reset-btn" onClick={() => handleNav("/login")}>Start Styling</button>
-              </div>
-            )}
+            <div className="nav-btns">
+              <button className="btn-ghost landing-reset-btn" onClick={() => handleNav("/login")}>Login</button>
+              <button className="btn-filled landing-reset-btn" onClick={() => handleNav("/login")}>Start Styling</button>
+            </div>
           </div>
         </div>
       </nav>
@@ -219,10 +182,10 @@ const Landing = () => {
             </p>
 
             <div className="hero-btns">
-              <button className="btn-primary landing-reset-btn" onClick={() => handleNav(user ? "/home" : "/login")}>
-                {user ? "Open Dashboard" : "Start Styling"}
+              <button className="btn-primary landing-reset-btn" onClick={() => handleNav("/login")}>
+                Start Styling
               </button>
-              <button className="btn-secondary landing-reset-btn" onClick={() => handleNav("/discover")}>
+              <button className="btn-secondary landing-reset-btn" onClick={() => handleNav("/login")}>
                 Explore Discover
               </button>
             </div>
@@ -232,10 +195,19 @@ const Landing = () => {
                 <span key={signal} className="hero-signal-pill">{signal}</span>
               ))}
             </div>
+
+            <div className="hero-editorial-note">
+              <p className="hero-note-label">Built for intentional dressers</p>
+              <p className="hero-note-copy">
+                Less trend noise, more useful direction across wardrobe planning, recommendation quality, and aesthetic consistency.
+              </p>
+            </div>
           </div>
 
           <div className="hero-stage">
             <div className="hero-stage-shell custom-model-stage">
+              <div className="hero-stage-halo hero-stage-halo-one" />
+              <div className="hero-stage-halo hero-stage-halo-two" />
               <img src={heroModel} alt="StyleMate Model" className="hero-center-model" />
               
               <div className="floating-stat stat-1">
@@ -260,6 +232,22 @@ const Landing = () => {
                   <h4>Target aesthetic</h4>
                   <p>Refine the exact look you want to grow into.</p>
                 </div>
+              </div>
+            </div>
+
+            <div className="hero-insight-panel">
+              <div className="hero-insight-header">
+                <p className="panel-eyebrow">How the system works</p>
+                <span className="hero-insight-badge">Editorial workflow</span>
+              </div>
+
+              <div className="hero-metrics-grid">
+                {heroMetrics.map((metric) => (
+                  <article key={metric.value} className="hero-metric-card">
+                    <span>{metric.value}</span>
+                    <p>{metric.label}</p>
+                  </article>
+                ))}
               </div>
             </div>
           </div>
@@ -331,10 +319,10 @@ const Landing = () => {
               Build a sharper closet, buy more intentionally, and style from a system that actually knows what you own.
             </p>
             <div className="hero-btns cta-actions">
-              <button className="btn-primary landing-reset-btn" onClick={() => handleNav(user ? "/home" : "/login")}>
-                {user ? "Go to Dashboard" : "Create Your Profile"}
+              <button className="btn-primary landing-reset-btn" onClick={() => handleNav("/login")}>
+                Create Your Profile
               </button>
-              <button className="btn-secondary landing-reset-btn" onClick={() => handleNav("/architect")}>
+              <button className="btn-secondary landing-reset-btn" onClick={() => handleNav("/login")}>
                 Open Image Architect
               </button>
             </div>

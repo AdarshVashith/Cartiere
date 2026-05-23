@@ -550,18 +550,18 @@
 /* Cloth Card Premium */
 .cloth-card-premium {
   background: white;
-  border-radius: 24px;
+  border-radius: 20px;
   border: 1px solid var(--border);
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-  transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+  box-shadow: 0 10px 24px rgba(20, 20, 20, 0.04);
+  transition: transform 0.32s ease, box-shadow 0.32s ease, border-color 0.32s ease;
   position: relative;
 }
 
 .cloth-card-premium:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
-  border-color: var(--mauve-soft);
+  transform: translateY(-10px) scale(1.01);
+  box-shadow: 0 28px 50px rgba(20, 20, 20, 0.12);
+  border-color: rgba(228, 71, 53, 0.2);
 }
 
 .card-img-wrap {
@@ -586,7 +586,7 @@
   position: absolute;
   top: 12px;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
@@ -603,7 +603,7 @@
 
 .badge-worn {
   right: 12px;
-  background: rgba(120, 72, 84, 0.9);
+  background: rgba(228, 71, 53, 0.95);
   color: white;
 }
 
@@ -685,7 +685,7 @@
 .btn-try:hover {
   background: var(--mauve);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(120, 72, 84, 0.2);
+  box-shadow: 0 10px 20px rgba(228, 71, 53, 0.22);
 }
 
 .btn-worn {

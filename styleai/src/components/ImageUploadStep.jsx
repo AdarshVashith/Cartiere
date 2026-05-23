@@ -87,30 +87,45 @@ function ImageUploadStep({ user, faceScanResult, onComplete }) {
   };
 
   return (
-    <section className="bg-white rounded-[40px] shadow-sm border border-[#784854]/05 p-12 max-w-4xl mx-auto fade-in-up">
-      <header className="text-center mb-10">
-        <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-[#784854]/60 mb-3">Geometric reference</p>
-        <h2 className="text-4xl font-['Cormorant_Garamond'] font-bold text-[#1A1A1A] mb-4">Body Mapping</h2>
-        <p className="text-[#666] text-lg font-light max-w-lg mx-auto">
-          Upload clear full-body photos. These references allow our AI to tailor garment fits precisely to your silhouette.
+    <section className="card onboarding-stage-card fade-in-up">
+      <header className="onboarding-stage-header">
+        <p className="onboarding-stage-kicker">Geometric Reference</p>
+        <h2 className="onboarding-stage-title">Body Mapping</h2>
+        <p className="onboarding-stage-copy">
+          Add two full-body references so the avatar engine can understand your proportions and how garments should fall.
         </p>
       </header>
 
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="onboarding-summary-grid">
         {[
           { label: 'Baseline Tone', value: faceScanResult?.skinTone },
           { label: 'Geometry', value: faceScanResult?.faceShape },
           { label: 'Biometrics', value: faceScanResult?.dominantExpression }
         ].map((stat, i) => (
-          <div key={i} className="bg-[#fcf6f7] rounded-2xl p-4 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#784854]/40 mb-1">{stat.label}</p>
-            <p className="font-bold text-[#784854] text-xs capitalize">{stat.value || 'Verified'}</p>
+          <div key={i} className="onboarding-metric-card">
+            <p>{stat.label}</p>
+            <strong>{stat.value || 'Verified'}</strong>
           </div>
         ))}
       </div>
 
-      <div className="flex flex-col gap-6">
-        <label className={`relative group cursor-pointer border-2 border-dashed rounded-[32px] p-12 transition-all ${files.length >= 2 ? 'border-[#784854]/10 bg-[#fcf6f7]/50' : 'border-[#784854]/20 hover:border-[#784854] hover:bg-[#fcf6f7]'}`}>
+      <div className="stack">
+        <div className="onboarding-photo-guides">
+          <article className="onboarding-guide-card">
+            <span>Front pose</span>
+            <p>Stand straight with the full body visible.</p>
+          </article>
+          <article className="onboarding-guide-card">
+            <span>Clean frame</span>
+            <p>Bright light and uncluttered background work best.</p>
+          </article>
+          <article className="onboarding-guide-card">
+            <span>Natural fit</span>
+            <p>Wear fitted basics so proportions read correctly.</p>
+          </article>
+        </div>
+
+        <label className={`onboarding-upload-dropzone ${files.length >= 2 ? 'disabled' : ''}`}>
           <input
             type="file"
             accept="image/*"
@@ -118,31 +133,30 @@ function ImageUploadStep({ user, faceScanResult, onComplete }) {
             disabled={files.length >= 2 || loading || uploadedItems.length > 0}
             onChange={handleFileSelection}
           />
-          <div className="flex flex-col items-center gap-4 text-center">
-            <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-2xl shadow-sm text-[#784854]">
+          <div className="onboarding-dropzone-inner">
+            <div className="onboarding-dropzone-icon">
               {files.length >= 2 ? '✓' : '+'}
             </div>
             <div>
-              <p className="font-bold text-[#1A1A1A]">
+              <p className="onboarding-dropzone-title">
                 {files.length >= 2 ? 'Capacity Reached' : `Select Photo ${files.length + 1} of 2`}
               </p>
-              <p className="text-[#666] text-sm mt-1">High-resolution portraits preferred.</p>
+              <p className="onboarding-dropzone-copy">High-resolution, full-length images preferred.</p>
             </div>
           </div>
         </label>
 
         {files.length > 0 && (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="selected-files onboarding-selected-grid">
             {files.map((file, index) => (
-              <div key={index} className="bg-white rounded-2xl p-4 border border-[#784854]/10 flex items-center justify-between shadow-sm fade-in">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="w-10 h-10 rounded-lg bg-[#fcf6f7] flex items-center justify-center text-[#784854]">🖼</div>
-                  <p className="text-sm font-medium text-[#1A1A1A] truncate">{file.name}</p>
+              <div key={index} className="selected-file-item fade-in">
+                <div className="onboarding-file-meta">
+                  <div className="onboarding-file-icon">🖼</div>
+                  <span>{file.name}</span>
                 </div>
                 <button
                   onClick={() => removeFile(index)}
                   disabled={loading || uploadedItems.length > 0}
-                  className="text-[#e74c3c] text-xs font-bold hover:underline"
                 >
                   Remove
                 </button>
@@ -153,14 +167,14 @@ function ImageUploadStep({ user, faceScanResult, onComplete }) {
 
         <button
           type="button"
-          className="premium-button-primary w-full py-5 rounded-2xl bg-[#1A1A1A] text-white font-bold hover:bg-[#784854] transition-all shadow-xl hover:shadow-[#784854]/20 mt-4"
+          className="premium-button-primary onboarding-submit-button"
           onClick={handleUpload}
           disabled={loading || uploadedItems.length > 0 || files.length !== 2}
         >
           {loading ? "Establishing Link..." : uploadedItems.length ? "Files Synchronized" : "Upload References"}
         </button>
 
-        {status && <p className="text-center text-sm font-medium text-[#784854]/60">{status}</p>}
+        {status && <p className="status-text onboarding-status-text">{status}</p>}
       </div>
     </section>
   );

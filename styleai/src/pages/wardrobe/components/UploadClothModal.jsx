@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { uploadToCloudinary } from '../../../utils/cloudinary'
 import { generateCleanGarmentImage } from '../../../utils/geminiVto'
-const BACKEND_URL = 'https://styleai-backend-adarsh-vashishthas-projects.vercel.app'
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL && !window.location.hostname.includes('vercel.app')
+  ? import.meta.env.VITE_BACKEND_URL
+  : 'https://styleai-backend-adarsh-vashishthas-projects.vercel.app'
 
 export default function UploadClothModal({ onClose, onSave }) {
   const [step, setStep] = useState('upload')
