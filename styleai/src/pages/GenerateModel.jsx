@@ -6,10 +6,6 @@ import { useNavigate } from 'react-router-dom'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import callBackend from '../utils/apiClient'
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL && !window.location.hostname.includes('vercel.app') 
-  ? import.meta.env.VITE_BACKEND_URL 
-  : ''
-
 export default function GenerateModel() {
   const navigate = useNavigate()
   const [user, setUser] = useState(null)
@@ -287,6 +283,22 @@ Ensure the entire body is centered and the face is unmistakably the same individ
                 <p className="text-[#666] text-xs leading-normal">Facial mapping coordinates verified for high-accuracy reconstruction.</p>
               </div>
             </div>
+
+            {step === 'ready' && !generating && (
+              <div className="bg-[#fff7f4] rounded-[24px] p-6 border border-[#784854]/10">
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#784854]/45 mb-3">Next Step</p>
+                <h3 className="text-2xl font-['Cormorant_Garamond'] font-bold text-[#1A1A1A] mb-3">Generate your avatar</h3>
+                <p className="text-[#666] text-sm leading-relaxed mb-5">
+                  Your scan and body details are ready. Start the synthesis to create your Cartieré digital twin.
+                </p>
+                <button
+                  onClick={generateAvatar}
+                  className="w-full px-6 py-4 rounded-[8px] bg-[#d8563f] text-white font-bold text-sm hover:bg-[#bf4933] transition-all shadow-lg shadow-[#d8563f]/15 active:scale-[0.98]"
+                >
+                  Generate Avatar
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Right Column: Generation Area */}
@@ -303,11 +315,14 @@ Ensure the entire body is centered and the face is unmistakably the same individ
                     </svg>
                   </div>
                   <h2 className="text-3xl font-['Cormorant_Garamond'] font-bold text-[#1A1A1A] mb-6">Ready for Synthesis</h2>
+                  <p className="text-[#666] text-sm leading-relaxed max-w-sm mx-auto mb-6">
+                    Press the button below to generate your avatar from your saved facial scan and profile details.
+                  </p>
                   <button 
                     onClick={generateAvatar} 
-                    className="px-12 py-5 rounded-2xl bg-[#1A1A1A] text-white font-bold text-lg hover:bg-[#784854] transition-all shadow-xl hover:shadow-[#784854]/20 active:scale-[0.98]"
+                    className="px-12 py-4 rounded-[8px] bg-[#d8563f] text-white font-bold text-base hover:bg-[#bf4933] transition-all shadow-xl hover:shadow-[#d8563f]/20 active:scale-[0.98]"
                   >
-                    Generate My Avatar
+                    Generate Avatar
                   </button>
                 </div>
               )}
